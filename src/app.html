@@ -82,7 +82,7 @@ details[open]>summary:before{transform:rotate(90deg)}
 .tab[aria-selected=true]{color:var(--blue)}
 .tab i{font-style:normal;position:relative}
 .tab i b{position:absolute;top:-4px;right:-12px;min-width:18px;padding:0 5px;border-radius:9px;background:var(--due);color:#fff;font-size:11px;line-height:18px}
-.fab{position:fixed;right:max(18px,calc(50% - 302px));bottom:calc(var(--bar) + 16px);width:62px;height:62px;border-radius:50%;border:0;background:#2f5d84;color:#fff;box-shadow:0 10px 24px -8px rgba(10,35,60,.6);cursor:pointer;display:grid;place-items:center;z-index:4}
+.fab{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;position:fixed;right:max(18px,calc(50% - 302px));bottom:calc(var(--bar) + 16px);width:62px;height:62px;border-radius:50%;border:0;background:#2f5d84;color:#fff;box-shadow:0 10px 24px -8px rgba(10,35,60,.6);cursor:pointer;display:grid;place-items:center;z-index:4}
 .fab svg{width:28px;height:28px}
 .shade{position:fixed;inset:0;background:rgba(8,20,32,.45);z-index:6;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--card);width:100%;max-width:640px;border-radius:18px 18px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px));max-height:88vh;overflow:auto}
@@ -182,6 +182,8 @@ textarea.field{min-height:96px;padding:10px 12px;resize:vertical}
 .meal:last-child{border-bottom:0}
 @media(min-width:900px){main,.wrap{max-width:1120px}.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}.week.wide{grid-template-columns:repeat(7,minmax(0,1fr))}.week.wide .ev{display:block}.week.wide .ev .tm{display:block}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.fab.rec{background:#c0392b;transform:scale(1.12);box-shadow:0 0 0 10px rgba(192,57,43,.18),0 10px 24px -8px rgba(10,35,60,.6);transition:transform .15s}
+.holdbub{position:fixed;right:max(18px,calc(50% - 302px));bottom:calc(var(--bar) + 92px);max-width:min(78vw,420px);background:#fff;color:#1d2b38;border-radius:16px;padding:12px 14px;box-shadow:0 12px 30px -10px rgba(10,35,60,.45);font-size:15px;line-height:1.35;z-index:6;pointer-events:none}
 </style>
 </head>
 <body>
@@ -759,7 +761,7 @@ document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&$('#shade'))close
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null;
 function openCapture(pre){
   let draft=typeof pre==='string'?pre:LS.get('fa-draft','');if(typeof draft!=='string'||/^\[object /.test(draft)){draft='';LS.set('fa-draft','')}
-  sheet(`<h2>Was gibt es?<button class="x" data-close aria-label="Schließen">×</button></h2><form id="cap"><textarea id="t" placeholder="Zahnarzt Dienstag 15 Uhr. Milch und Brot. Conny muss den TÜV machen." aria-label="Neuer Eintrag" enterkeyhint="send">${esc(draft)}</textarea><div class="row" style="margin-top:10px">${SR?`<button class="mic" type="button" id="mic" aria-label="Sprechen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>`:''}<span class="hint" id="st">${SR?'Mikrofon antippen und sprechen.':'Tipp: Mikrofon der Tastatur antippen und sprechen.'}</span><button class="btn main" id="go" type="submit">Merken</button></div></form>`);
+  sheet(`<h2>Was gibt es?<button class="x" data-close aria-label="Schließen">×</button></h2><form id="cap"><textarea id="t" placeholder="Zahnarzt Dienstag 15 Uhr. Milch und Brot. Conny muss den TÜV machen." aria-label="Neuer Eintrag" enterkeyhint="send">${esc(draft)}</textarea><div class="row" style="margin-top:10px">${SR?`<button class="mic" type="button" id="mic" aria-label="Sprechen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>`:''}<span class="hint" id="st">${SR?'Tipp: Den runden Mikrofon-Knopf gedrückt halten startet die Aufnahme sofort.':'Tipp: Mikrofon der Tastatur antippen und sprechen.'}</span><button class="btn main" id="go" type="submit">Merken</button></div></form>`);
   const t=$('#t');setTimeout(()=>{t.focus();t.setSelectionRange(t.value.length,t.value.length)},60);
   t.addEventListener('input',()=>LS.set('fa-draft',t.value));
   t.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();$('#cap').requestSubmit()}});
@@ -984,7 +986,22 @@ $('#counts').addEventListener('click',ev=>{const b=ev.target.closest('[data-go]'
 $('#find').addEventListener('click',()=>{go('suche');setTimeout(()=>{const i=$('#sq');if(i)i.focus()},50)});
 let rsT=null;window.addEventListener('resize',()=>{clearTimeout(rsT);rsT=setTimeout(render,200)});
 $('#gear').addEventListener('click',async()=>{go('mehr');try{quickExists=(await api('/api/token')).exists;if(window.PublicKeyCredential)fidCount=(await api('/api/passkey')).count;render()}catch(e){}});
-$('#fab').addEventListener('click',()=>openCapture());
+(function(){const fab=$('#fab');let timer=null,hold=false,hr=null,txt='',bub=null,cancel=false;
+  const bubble=m=>{if(!bub){bub=document.createElement('div');bub.className='holdbub';bub.setAttribute('role','status');document.body.appendChild(bub)}bub.textContent=m};
+  const unbubble=()=>{if(bub){bub.remove();bub=null}fab.classList.remove('rec')};
+  const finish=()=>{unbubble();const t=txt.trim();hr=null;if(cancel)return;if(t){const d=LS.get('fa-draft','');openCapture((typeof d==='string'&&d&&!/^\[object /.test(d)?d.replace(/\s*$/,' '):'')+t);const st=$('#st');if(st)st.textContent='Passt so? Dann „Merken“.'}else toast('Nichts verstanden – nochmal gedrückt halten und sprechen.')};
+  const startRec=()=>{hold=true;txt='';cancel=false;if(navigator.vibrate)try{navigator.vibrate(15)}catch(e){}
+    fab.classList.add('rec');bubble('Ich höre zu … loslassen zum Beenden');
+    try{hr=new SR();hr.lang='de-DE';hr.interimResults=true;hr.continuous=true;
+      hr.onresult=e=>{let s='';for(const r of e.results)s+=r[0].transcript;txt=s;bubble(s||'Ich höre zu …')};
+      hr.onerror=e=>{if(e&&(e.error==='not-allowed'||e.error==='service-not-allowed')){cancel=true;unbubble();hr=null;openCapture();const st=$('#st');if(st)st.textContent='Mikrofon nicht erlaubt – Mikrofon unten antippen.'}};
+      hr.onend=finish;hr.start()}catch(e){hr=null;unbubble();openCapture()}};
+  fab.addEventListener('contextmenu',e=>e.preventDefault());
+  fab.addEventListener('pointerdown',e=>{if(e.button>0)return;hold=false;if(!SR)return;clearTimeout(timer);timer=setTimeout(startRec,320)});
+  const up=e=>{clearTimeout(timer);timer=null;if(hold){if(hr){try{hr.stop()}catch(x){finish()}}hold=false}};
+  fab.addEventListener('pointerup',up);fab.addEventListener('pointercancel',()=>{clearTimeout(timer);if(hold&&hr){cancel=true;try{hr.abort()}catch(x){}unbubble()}hold=false});
+  fab.addEventListener('click',e=>{if(fab.classList.contains('rec')||hr||hold)return;openCapture()});
+})();
 let pressT=null,pressed=false;
 $('#p').addEventListener('pointerdown',ev=>{const t=ev.target.closest('[data-buy]');if(!t)return;pressed=false;clearTimeout(pressT);pressT=setTimeout(()=>{pressed=true;openItem('e:'+t.dataset.buy)},550)});
 ['pointerup','pointercancel','pointerleave'].forEach(n=>$('#p').addEventListener(n,()=>clearTimeout(pressT)));

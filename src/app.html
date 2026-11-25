@@ -671,7 +671,7 @@ function pushBox(){
 function vMehr(){
   const p=ME.prefs||{};
   let h=`<button class="link back" data-go="heute">‹ Heute</button>`;
-  h+=card('Mitteilungen',pushBox()+`<form id="prefs"><div class="two"><label class="f">Morgen-Übersicht Mo–Fr<input type="time" name="morgenWerktag" value="${esc(p.morgenWerktag||'06:30')}"></label><label class="f">Sa und So<input type="time" name="morgenWochenende" value="${esc(p.morgenWochenende||'09:00')}"></label></div><div class="two"><label class="f">Ruhezeit ab<input type="time" name="ruheVon" value="${esc(p.ruheVon||'22:00')}"></label><label class="f">bis<input type="time" name="ruheBis" value="${esc(p.ruheBis||'06:30')}"></label></div><p class="meta" style="margin:0 0 10px">In der Ruhezeit schweigen Pinnwand, Vorschläge und neue Aufgaben. Termine und Aufgaben mit Uhrzeit melden sich trotzdem.</p><div class="two"><label class="f">Wochenvorschau sonntags<input type="time" name="woche" value="${esc(p.woche&&p.woche!=='aus'?p.woche:'18:00')}"${p.woche==='aus'?' disabled':''}></label><label class="f" style="align-self:end;display:flex;gap:8px;align-items:center;min-height:44px"><input type="checkbox" name="wocheAus"${p.woche==='aus'?' checked':''} data-a="wocheaus">aus</label></div><button class="btn sm main" type="submit">Zeiten speichern</button></form><div style="height:10px"></div>`);
+  h+=card('Mitteilungen',pushBox()+`<form id="prefs"><div class="two"><label class="f">Morgen-Übersicht Mo–Fr<input type="time" name="morgenWerktag" value="${esc(p.morgenWerktag||'06:30')}"></label><label class="f">Sa und So<input type="time" name="morgenWochenende" value="${esc(p.morgenWochenende||'09:00')}"></label></div><div class="two"><label class="f">Ruhezeit ab<input type="time" name="ruheVon" value="${esc(p.ruheVon||'22:00')}"></label><label class="f">bis<input type="time" name="ruheBis" value="${esc(p.ruheBis||'06:30')}"></label></div><p class="meta" style="margin:0 0 10px">In der Ruhezeit schweigen Pinnwand, Vorschläge und neue Aufgaben. Termine und Aufgaben mit Uhrzeit melden sich trotzdem.</p><div class="two"><label class="f">Wochenvorschau sonntags<input type="time" name="woche" value="${esc(p.woche&&p.woche!=='aus'?p.woche:'18:00')}"${p.woche==='aus'?' disabled':''}></label><label class="f" style="align-self:end;display:flex;gap:8px;align-items:center;min-height:44px"><input type="checkbox" style="width:22px;height:22px;flex:0 0 auto;margin:0" name="wocheAus"${p.woche==='aus'?' checked':''} data-a="wocheaus">keine Wochenvorschau</label></div><button class="btn sm main" type="submit">Zeiten speichern</button></form><div style="height:10px"></div>`);
   if(canSee('pinnwand'))h+=card('Familien-Infos',`<p class="meta" style="margin-top:6px">Notfallnummern, Ärzte, Schule, Größen: alles, was man selten, aber dann schnell braucht.</p><div class="row" style="margin-bottom:10px"><button class="btn sm" data-go="infos">Öffnen (${I.length})</button></div>`);
   if(ME.role!=='tablet'&&AREAS.some(([k])=>canWrite(k)))h+=card('Kurzbefehl: Aktionstaste und Siri',`<p class="meta" style="margin-top:6px">Damit sprichst du einen Satz ein, ohne die App zu öffnen: Aktionstaste drücken oder „Hey Siri, merk dir“ sagen.</p>${quickLink?`<input class="field" readonly value="${esc(quickLink)}" aria-label="Dein persönlicher Link" style="font-size:13px;margin:6px 0"><div class="row" style="margin-bottom:8px"><button class="btn sm" data-a="qcopy">Link kopieren</button><button class="btn sm warn" data-a="qoff">Link ungültig machen</button></div><p class="meta">Den Link nur in deinen eigenen Kurzbefehl einfügen, nicht weitergeben. Wer ihn hat, kann in deinem Namen Einträge anlegen, aber nichts lesen.</p>`:`<div class="row" style="margin:6px 0 8px"><button class="btn sm main" data-a="qnew">${quickExists?'Neuen Link erzeugen':'Persönlichen Link erzeugen'}</button></div>${quickExists?'<p class="meta">Du hast schon einen Link. Ein neuer macht den alten ungültig.</p>':''}`}<details${dk('qhelp')}><summary>So richtest du den Kurzbefehl ein</summary><ol class="meta" style="padding-left:20px;margin:0 0 10px"><li>Hast du von einem Familienmitglied einen Kurzbefehl-Link bekommen: öffnen, „Kurzbefehl hinzufügen“, deinen Link von oben einfügen. Fertig.</li><li>Sonst selbst bauen: App „Kurzbefehle“ › „+“ › Name „Merk dir“.</li><li>Aktion „Text diktieren“ (Sprache Deutsch).</li><li>Aktion „Inhalte von URL abrufen“: als URL deinen Link einfügen, Methode „POST“, Anforderungstext „Datei“, als Datei „Diktierter Text“.</li><li>Aktion „Ergebnis anzeigen“ mit „Inhalte von URL“.</li><li>Aktionstaste: iPhone-Einstellungen › Aktionstaste › Kurzbefehl › „Merk dir“.</li><li>Zum Teilen mit der Familie: im Kurzbefehl auf Teilen › „iCloud-Link kopieren“ und vorher bei „Einrichtung“ die URL als Importfrage markieren.</li></ol></details>`);
   const myc=colorOf(meId);
@@ -683,7 +683,7 @@ function vMehr(){
 }
 function vFamilie(){
   if(!adminUsers){loadAdmin();return card('Familie','<p class="empty">Lädt …</p>')}
-  const areaBoxes=(u,role)=>{const pr=u?u.perms:PRESETS[role||'erwachsener'];const r=u?u.role:role;return `<details style="margin:4px 0"${r==='admin'?' hidden':''} data-k="permwrap"><summary>Rechte im Detail</summary><div class="areas" data-k="perms">${AREAS.map(([k,l])=>`<label>${l}<select data-area="${k}">${opts(LEVELS,pr[k])}</select></label>`).join('')}</div></details>`};
+  const areaBoxes=(u,role)=>{const pr=u?u.perms:PRESETS[role||'erwachsener'];const r=u?u.role:role;return `<details style="margin:4px 0"${r==='admin'?' hidden':''} data-k="permwrap"${dk('perm'+(u?u.id:'new'))}><summary>Rechte im Detail</summary><div class="areas" data-k="perms">${AREAS.map(([k,l])=>`<label>${l}<select data-area="${k}">${opts(LEVELS,pr[k])}</select></label>`).join('')}</div></details>`};
   const swatch=(cur)=>`<div class="swatches">${COLORS.map(c=>`<button type="button" class="sw" data-a="ucolor" data-c="${c}" style="background:${c}" aria-label="Farbe" aria-pressed="${c===cur}"></button>`).join('')}</div>`;
   const roleSel=u=>`<select data-k="role" aria-label="Rolle">${opts(ROLES,u?u.role:'kind')}</select>`;
   const RL=Object.fromEntries(ROLES);
@@ -717,6 +717,14 @@ function renderHead(){
   document.querySelectorAll('[data-badge]').forEach(b=>{const n=bd[b.dataset.badge]||0;b.textContent=n;b.hidden=!n});
 }
 let renderTO=null,booting=false;
+// Ungespeicherte Eingaben in der Mitgliederverwaltung überstehen das automatische Neuzeichnen
+function snapForms(){const m=[];document.querySelectorAll('#p [data-u],#p #newu').forEach(box=>{const id=box.dataset.u||'newu';
+  box.querySelectorAll('select,input').forEach(el=>{const k=el.dataset.area?'a:'+el.dataset.area:el.dataset.k?'k:'+el.dataset.k:null;if(!k||el.type==='file')return;m.push([id,k,el.type==='checkbox'?el.checked:el.value])});
+  const sw=box.querySelector('.sw[aria-pressed=true]');if(sw)m.push([id,'sw',sw.dataset.c])});return m}
+function restoreForms(m){for(const [id,k,v] of m){const box=id==='newu'?document.getElementById('newu'):document.querySelector('#p [data-u="'+CSS.escape(id)+'"]');if(!box)continue;
+  if(k==='sw'){box.querySelectorAll('.sw').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.c===v)));continue}
+  const el=box.querySelector(k.startsWith('a:')?'[data-area="'+k.slice(2)+'"]':'[data-k="'+k.slice(2)+'"]');if(!el)continue;
+  if(el.type==='checkbox')el.checked=v;else el.value=v;if(k==='k:role'){const pa=box.querySelector('[data-k=permwrap]');if(pa)pa.hidden=v==='admin'}}}
 function render(){
   if(!ME||booting)return;
   if(!allowedView(view))view=TABS[0];
@@ -727,7 +735,9 @@ function render(){
   const keep=a&&['q','buyIn','sq'].includes(a.id)?a.id:null;
   if(!keep&&a&&a.closest&&a.closest('#p')&&a.matches('input,select,textarea')&&a.type!=='checkbox')return;
   const val=keep?a.value:'';
+  const forms=view==='mehr'?snapForms():null;
   $('#p').innerHTML=VIEWS[view][1]();
+  if(forms)restoreForms(forms);
   if(keep){const i=document.getElementById(keep);if(i){i.value=val;i.focus();try{i.setSelectionRange(val.length,val.length)}catch(e){}}}
 }
 function go(v,s){view=v;sub=s||'';if(sub==='essen')openD.add('essen');try{localStorage.setItem('fa-view',TABS.includes(v)?v:'heute')}catch(e){}render();window.scrollTo(0,0);if(s==='essen')setTimeout(()=>{const x=$('#essen');if(x)x.scrollIntoView({behavior:'smooth'})},50)}
@@ -1057,7 +1067,7 @@ $('#p').addEventListener('click',async ev=>{
       return}
     if(a==='uadd'){const box=$('#newu');const name=box.querySelector('[data-k=name]').value.trim();if(!name){toast('Bitte einen Namen eingeben.');return}
       const profil=box.querySelector('[data-k=profil]').checked;
-      const r=await api('/api/admin/users',{name,role:box.querySelector('[data-k=role]').value,perms:areasOf(box),profil});
+      const r=await api('/api/admin/users',{name,role:box.querySelector('[data-k=role]').value,perms:areasOf(box),profil});box.querySelector('[data-k=name]').value='';box.querySelector('[data-k=profil]').checked=false;
       USERS=(await api('/api/me')).users;adminUsers=null;await loadAdmin();const nb=$('#newu');if(nb){openD.add('newu');nb.closest('details').open=true;if(r.link)linkBox(nb.querySelector('[data-k=link]'),r.link,name);else{nb.querySelector('[data-k=link]').innerHTML=`<p class="meta">${esc(name)} ist angelegt und kann jetzt Aufgaben bekommen.</p>`}}return}
     if(uEl){const id=uEl.dataset.u;const u=adminUsers.find(x=>x.id===id);
       if(a==='usave'){const sw=uEl.querySelector('.sw[aria-pressed=true]');await api('/api/admin/users/'+id,{role:uEl.querySelector('[data-k=role]').value,active:uEl.querySelector('[data-k=active]').checked,perms:areasOf(uEl),color:sw?sw.dataset.c:undefined});USERS=(await api('/api/me')).users;adminUsers=null;await loadAdmin();toast('Gespeichert.');return}

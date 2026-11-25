@@ -21,7 +21,7 @@ await p.click('#fab'); await p.waitForSelector('#t'); assert.equal(await p.evalu
 await p.click('[data-close]'); await p.waitForTimeout(300);
 // Halten -> Aufnahme
 const b=await p.locator('#fab').boundingBox();
-console.log(await p.evaluate(([x,y])=>{const e=document.elementFromPoint(x,y);return e.id+'|'+e.className+'|'+typeof window.webkitSpeechRecognition},[b.x+20,b.y+20]));await p.mouse.move(b.x+20,b.y+20);await p.mouse.down();await p.waitForTimeout(500);
+await p.mouse.move(b.x+20,b.y+20);await p.mouse.down();await p.waitForTimeout(500);
 assert.equal(await p.evaluate(()=>window.__started),1,'Halten startet Aufnahme');
 assert.ok(await p.locator('.holdbub').count(),'Sprechblase sichtbar');
 await p.evaluate(()=>window.__rec.onresult({results:[[{transcript:'Milch und Brot'}]]}));

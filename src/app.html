@@ -396,6 +396,30 @@ function vPinnwand(){
   h+=`<p class="meta" style="padding:0 4px">× blendet einen Hinweis nur für dich aus. ✓ nimmt ihn für alle ab (wer ihn angepinnt hat oder Erwachsene).</p>`;
   return h;
 }
+function openNew(kind,o){
+  o=o||{};const d=isDate(o.d)?o.d:'';
+  const fuer=`<label class="f">Für<select name="fuer">${fuerOpts('wir')}</select></label>`;
+  let f='',title={termin:'Neuer Termin',aufgabe:'Neue Aufgabe',gedanke:'Neue Idee'}[kind];
+  if(kind==='termin')f=`<label class="f">Was<input name="titel" required placeholder="z. B. Zahnarzt Max"></label><div class="two"><label class="f">Datum<input type="date" name="d" value="${esc(d||t0())}" required></label><label class="f">Uhrzeit (leer = ganztags)<input type="time" name="z"></label></div><div class="two"><label class="f">Wiederholen<select name="wdh">${opts(WDH,'')}</select></label><label class="f">Erinnerung<select name="erinnerung">${opts(REMIND,'60')}</select></label></div><div class="two">${fuer}<label class="f">Sichtbar<select name="sicht">${sichtOpts('familie')}</select></label></div>`;
+  if(kind==='aufgabe')f=`<label class="f">Was<input name="titel" required placeholder="z. B. TÜV-Termin machen"></label><div class="two"><label class="f">Fällig am (optional)<input type="date" name="faellig" value="${esc(d)}"></label><label class="f">Uhrzeit (dann klingelt es)<input type="time" name="zeit"></label></div><div class="two">${fuer}<label class="f">Sichtbar<select name="sicht">${sichtOpts('familie')}</select></label></div>`;
+  if(kind==='gedanke'){const names=T.map(t=>t.name);f=`<label class="f">Thema<input name="thema" list="themes2" value="${esc(o.thema||'')}" placeholder="z. B. Garten, Urlaub 2027" required><datalist id="themes2">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist></label><label class="f">Gedanke<textarea class="field" name="text" required placeholder="z. B. Hecke im Frühjahr schneiden lassen"></textarea></label><label class="f">Wieder zeigen am<input type="date" name="due" value="${esc(addDays(t0(),7))}" min="${t0()}"></label>`}
+  if(!f)return;
+  sheet(`<h2>${title}<button class="x" data-close aria-label="Schließen">×</button></h2><form id="newf" data-k="${kind}">${f}<div class="row"><button class="btn main" type="submit">Speichern</button></div></form>`);
+  setTimeout(()=>{const i=document.querySelector('#newf [name=titel],#newf [name=thema]');if(i&&!i.value)i.focus();else{const t=document.querySelector('#newf textarea');if(t)t.focus()}},60);
+}
+async function saveNew(fm){
+  const k=fm.dataset.k,fd=Object.fromEntries(new FormData(fm)),at=new Date().toISOString(),id=uid();
+  const titel=String(fd.titel||'').trim().slice(0,120);
+  try{
+    if(k==='termin'){if(!titel||!isDate(fd.d))return;const d={kind:'termin',titel,text:titel,by:meId,at,start:isTime(fd.z)?fd.d+'T'+fd.z:fd.d,ganztags:!isTime(fd.z),fuer:fd.fuer||'wir',sicht:fd.sicht||'familie',erinnerung:fd.erinnerung==='aus'?'aus':Number(fd.erinnerung)};if(WDHL[fd.wdh])d.wdh=fd.wdh;if(!isAdult())d.vorschlag=true;closeSheet();await put('eintraege',id,d);toast({text:(d.vorschlag?'Vorschlag: ':'Termin: ')+titel+', '+relDay(fd.d)+(isTime(fd.z)?' '+fd.z:''),open:'e:'+id});return}
+    if(k==='aufgabe'){if(!titel)return;const d={kind:'aufgabe',titel,text:titel,by:meId,at,done:false,fuer:fd.fuer||'wir',sicht:fd.sicht||'familie',faellig:isDate(fd.faellig)?fd.faellig:'',zeit:isDate(fd.faellig)&&isTime(fd.zeit)?fd.zeit:''};closeSheet();await put('eintraege',id,d);toast({text:'Aufgabe: '+titel+(d.faellig?', '+relDay(d.faellig):''),open:'e:'+id});return}
+    if(k==='gedanke'){const text=String(fd.text||'').trim().slice(0,1000);const name0=String(fd.thema||'').trim().slice(0,60);if(!text||!name0)return;closeSheet();
+      const sicht=isAdult()?'erwachsene':'familie';const name=await ensureTheme(name0,sicht);const t=T.find(x=>x.name===name);
+      if(isDate(fd.due)&&t&&(!t.due||fd.due<t.due||t.done))await upd('themen',t.id,{due:fd.due,done:false});
+      await put('eintraege',id,{kind:'gedanke',titel:text.slice(0,60),text,thema:name,by:meId,at,sicht});
+      openTopics.add(t?t.id:slug(name));toast('Idee zu „'+name+'“ gespeichert.');return}
+  }catch(e){toast(e.message||'Speichern hat nicht geklappt.')}
+}
 function openPin(){
   sheet(`<h2>An die Pinnwand<button class="x" data-close aria-label="Schließen">×</button></h2><form id="pinf"><textarea class="field" name="t" placeholder="z. B. Paket liegt beim Nachbarn. Oder: Bin heute erst um 19 Uhr zu Hause." aria-label="Hinweis" style="width:100%" required></textarea><p class="meta">Alle anderen bekommen eine Mitteilung (außer in ihrer Ruhezeit).</p><div class="row"><button class="btn main" type="submit">Anpinnen</button></div></form>`);
   setTimeout(()=>{const t=document.querySelector('#pinf textarea');if(t)t.focus()},60);
@@ -420,6 +444,7 @@ function vHeute(){
   if(canSee('aufgaben')){const ts=dueTasks(),ss=S.filter(serieDue).sort((a,b)=>String(a.next).localeCompare(String(b.next))),dn=doneToday();const all=openTasks().filter(isMine).length;
     let b=ss.map(serieRow).join('')+ts.slice(0,7).map(taskRow).join('');
     if(!b)b='<p class="empty">Nichts fällig.</p>';
+    if(canWrite('aufgaben'))b+='<button class="link" data-a="new" data-k="aufgabe">+ Aufgabe</button>';
     if(ts.length>7)b+=`<button class="link" data-go="aufgaben">und ${ts.length-7} weitere</button>`;
     if(dn.length)b+=`<details${dk('dn')}><summary>${dn.length} heute erledigt</summary>${dn.map(taskRow).join('')}</details>`;
     if(ME.role==='kind'){const wk=weekStats(meId);if(wk.total)b+=`<p class="meta">Diese Woche: ${wk.done} von ${wk.total} erledigt</p><div class="bar2" style="--c:${colorOf(meId)}"><i style="width:${Math.round(100*wk.done/wk.total)}%"></i></div>`}
@@ -467,7 +492,7 @@ function vAufgaben(){
   const g={late:[],now:[],soon:[],none:[]};
   for(const e of open)(!e.faellig?g.none:e.faellig<t0()?g.late:e.faellig===t0()?g.now:g.soon).push(e);
   const done=E.filter(e=>e.kind==='aufgabe'&&e.done).sort((a,b)=>String(b.doneAt||'').localeCompare(String(a.doneAt||''))).slice(0,15);
-  let h=`<button class="link back" data-go="heute">‹ Heute</button><div class="row" style="margin:0 0 10px"><button class="btn sm" data-a="mine" aria-pressed="${mineOnly}">Meine</button><button class="btn sm" data-a="all" aria-pressed="${!mineOnly}">Alle</button></div>`;
+  let h=`<button class="link back" data-go="heute">‹ Heute</button><div class="row" style="margin:0 0 10px"><button class="btn sm" data-a="mine" aria-pressed="${mineOnly}">Meine</button><button class="btn sm" data-a="all" aria-pressed="${!mineOnly}">Alle</button>${canWrite('aufgaben')?'<button class="btn sm main" data-a="new" data-k="aufgabe" style="margin-left:auto">+ Aufgabe</button>':''}</div>`;
   const sec=(t,l)=>l.length?card(t,l.map(taskRow).join('')):'';
   h+=sec('Überfällig',g.late)+sec('Heute',g.now)+sec('Demnächst',g.soon)+sec('Ohne Datum',g.none);
   if(!open.length)h+=card('Aufgaben','<p class="empty">Keine offenen Aufgaben.</p>');
@@ -482,6 +507,7 @@ function vKalender(){
   let h='';const ps=proposals();
   if(ps.length)h+=card('Vorschläge zum Bestätigen',ps.map(evRow).join(''));
   const anchor=calAnchor||t0();
+  if(canWrite('termine'))h+=`<div class="row" style="margin:0 0 10px"><button class="btn sm main" data-a="new" data-k="termin" data-d="${esc(calMode==='liste'?'':anchor)}">+ Termin</button></div>`;
   h+=`<div class="seg" role="group" aria-label="Ansicht">${[['liste','Liste'],['woche','Woche'],['tag','Tag']].map(([k,l])=>`<button data-a="calmode" data-m="${k}" aria-pressed="${calMode===k}">${l}</button>`).join('')}</div>`;
   if(calMode==='liste'){
     let body='';
@@ -554,7 +580,7 @@ function vEssenCard(){
   return `<section class="card" id="essen"><details${dk('essen')}><summary>Essensplan der Woche</summary>${b}</details></section>`;
 }
 function vIdeen(){
-  let h='';const ib=inbox();
+  let h=canWrite('themen')?`<div class="row" style="margin:0 0 10px"><button class="btn sm main" data-a="new" data-k="gedanke">+ Idee</button></div>`:'';const ib=inbox();
   if(ib.length)h+=card('Eingang: einzeln zuordnen',ib.map(e=>`<div class="inbox" data-e="${esc(e.id)}"><p>${esc(e.text||e.titel)}</p><div class="row">${[['termin','Termin'],['aufgabe','Aufgabe'],['einkauf','Einkauf'],['gedanke','Idee']].filter(([k])=>canWrite(KIND_AREA[k])).map(([k,l])=>`<button class="btn sm" data-a="to-${k}">${l}</button>`).join('')}<button class="btn sm" data-a="x-ai">Automatisch</button><button class="x" data-a="del" aria-label="Löschen">×</button></div></div>`).join(''));
   const open=T.filter(t=>!t.done).sort((a,b)=>String(a.due||'9').localeCompare(String(b.due||'9'))),done=T.filter(t=>t.done);
   const now=open.filter(t=>t.due&&t.due<=t0()),later=open.filter(t=>!(t.due&&t.due<=t0()));
@@ -565,7 +591,7 @@ function vIdeen(){
 }
 function topicRow(t){
   const es=themeEntries(t.name);const late=!t.done&&t.due&&t.due<=t0();const w=fullEdit(t,'themen');
-  const acts=!w?'':t.done?`<button class="btn sm" data-a="reopen">Wieder öffnen</button>`:`<button class="btn sm" data-a="later">Später</button><button class="btn sm" data-a="tdone">Erledigt</button><button class="btn sm" data-a="tedit">Bearbeiten</button>`;
+  const acts=!w?'':t.done?`<button class="btn sm" data-a="reopen">Wieder öffnen</button>`:`<button class="btn sm" data-a="new" data-k="gedanke" data-t="${esc(t.name)}">+ Gedanke</button><button class="btn sm" data-a="later">Später</button><button class="btn sm" data-a="tdone">Erledigt</button><button class="btn sm" data-a="tedit">Bearbeiten</button>`;
   const when=t.done?'erledigt':late?'jetzt dran':'meldet sich '+(relDay(t.due)==='Morgen'?'morgen':'am '+fmtDay(t.due));
   return `<details class="topic" data-t="${esc(t.id)}"${openTopics.has(t.id)?' open':''}><summary>${esc(t.name)}<span class="${late?'late':''}">${esc(when)} · ${es.length}</span></summary><ul class="lines">${es.map(e=>`<li>${esc(e.text||e.titel)} <span>· ${esc(who(e.by)||'')}, ${esc(fmtDay(String(e.at||'').slice(0,10)))}</span></li>`).join('')}</ul><div class="row" style="margin-bottom:8px">${acts}</div></details>`;
 }
@@ -760,6 +786,7 @@ $('#sheetRoot').addEventListener('submit',async ev=>{
     await upd('themen',t.id,{name,due:isDate(fd.due)?fd.due:t.due,sicht:fd.sicht});
     for(const e of themeEntries(t.name))if(e.by===meId||isAdult())await upd('eintraege',e.id,{thema:name,sicht:fd.sicht});
     toast('Gespeichert.');return}
+  if(fm0.id==='newf'){ev.preventDefault();return saveNew(fm0)}
   if(fm0.id==='pinf'){ev.preventDefault();const t=String(new FormData(fm0).get('t')||'').trim().slice(0,500);if(!t)return;closeSheet();
     await put('eintraege',uid(),{kind:'nachricht',titel:t.slice(0,60),text:t,by:meId,at:new Date().toISOString(),done:false,readBy:[meId],sicht:'familie'});toast('Angepinnt. Die anderen bekommen eine Mitteilung.');return}
   if(fm0.id==='listf'){ev.preventDefault();const fd=Object.fromEntries(new FormData(fm0));const name=String(fd.name||'').trim().slice(0,40);if(!name)return;const id=fm0.dataset.l||('l-'+uid().slice(2));closeSheet();
@@ -892,7 +919,8 @@ $('#p').addEventListener('click',async ev=>{
     if(a==='calprev'||a==='calnext'){const st=calMode==='woche'?7:1;calAnchor=addDays(calAnchor||t0(),a==='calprev'?-st:st);render();return}
     if(a==='caltoday'){calAnchor=t0();render();return}
     if(a==='towoche'){calMode='woche';calAnchor=t0();LS.set('fa-cal',calMode);go('kalender');return}
-    if(a==='caladd'){openCapture('Am '+fmtLong(btn.dataset.d)+' ');return}
+    if(a==='caladd'){openNew('termin',{d:btn.dataset.d});return}
+    if(a==='new'){openNew(btn.dataset.k,{d:btn.dataset.d||'',thema:btn.dataset.t||''});return}
     if(a==='infoadd'){openInfo();return}
     if(a==='infoedit'){openInfo(I.find(x=>x.id===btn.dataset.i));return}
     if(a==='qnew'){const r=await api('/api/token',{});quickLink=r.link;quickExists=true;render();return}

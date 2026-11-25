@@ -236,6 +236,18 @@ try {
   await fresh.waitForSelector('.sheet:has-text("Willkommen")'); await fresh.screenshot({ path: 'test/shot-intro.png' });
   await fresh.click('.sheet [data-a=startcap]'); await fresh.waitForSelector('#t');
 
+  // Von Hand anlegen: Termin, Aufgabe, Idee
+  await ph.click('.tab[data-v=kalender]'); await ph.click('[data-a=new][data-k=termin]');
+  await ph.fill('#newf [name=titel]', 'Elternsprechtag'); await ph.fill('#newf [name=d]', '2026-12-03'); await ph.fill('#newf [name=z]', '18:00'); await ph.click('#newf [type=submit]');
+  await ph.waitForSelector('.toast:has-text("Termin: Elternsprechtag")'); await ph.click('[data-a=calmode][data-m=liste]');
+  await ph.waitForSelector('.ev:has-text("Elternsprechtag")');
+  await ph.click('.tab[data-v=ideen]'); await ph.click('[data-a=new][data-k=gedanke]');
+  await ph.fill('#newf [name=thema]', 'Weihnachten'); await ph.fill('#newf [name=text]', 'Plätzchen mit den Kindern backen'); await ph.click('#newf [type=submit]');
+  await ph.waitForSelector('.topic:has-text("Weihnachten")'); assert.match(await ph.textContent('.topic:has-text("Weihnachten")'), /Plätzchen/);
+  await ph.click('.tab[data-v=heute]'); await ph.click('.card:has-text("Zu erledigen") [data-a=new]');
+  await ph.fill('#newf [name=titel]', 'Winterreifen aufziehen'); await ph.click('#newf [type=submit]');
+  await ph.waitForSelector('.task:has-text("Winterreifen")');
+
   // Pinnwand: anpinnen, Übersicht, abnehmen
   await ph.click('.tab[data-v=heute]'); await ph.click('[data-a=pinnew]');
   await ph.fill('#pinf textarea', 'Oma kommt Sonntag zum Kaffee'); await ph.click('#pinf [type=submit]');

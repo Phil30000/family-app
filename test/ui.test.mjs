@@ -282,7 +282,24 @@ try {
   await ph.click('.tab[data-v=einkauf]'); await ph.click('summary:has-text("Essensplan")');
   const meal = ph.locator(`[data-d="${today}"] input`); await meal.fill('Lasagne'); await meal.press('Enter');
   await ph.waitForSelector("[data-a=zutaten]", { timeout: 5000 }).catch(async (e) => { await ph.screenshot({ path: "/tmp/fail.png", fullPage: true }); console.log("F", JSON.stringify(await env.DB.prepare("SELECT data FROM docs WHERE coll='essen'").all())); throw e; }); await ph.click("[data-a=zutaten]");
-  await ph.waitForSelector('.toast:has-text("Hackfleisch")');
+  await ph.waitForSelector('#zutf'); await ph.click('#zutf [type=submit]');
+  await ph.waitForSelector('.toast:has-text("Zutaten")');
+  // Liste mit Einkaufstag (Tag vor dem Essen) wird vorgeschlagen; gleiche Zutaten werden zusammengeführt
+  const d2 = new Date(today + 'T12:00:00'); d2.setDate(d2.getDate() + 2); const day2 = d2.toISOString().slice(0, 10);
+  const shopTag = String((d2.getDay() + 6) % 7);
+  await ph.click('[data-a=listadd]'); await ph.fill('#listf [name=name]', 'Frisch'); await ph.selectOption('#listf [name=tag]', shopTag); await ph.click('#listf [type=submit]');
+  await ph.waitForTimeout(200); await ph.click('[data-a=list][data-l=""]');
+  if (!(await ph.isVisible(`[data-d="${day2}"] input`))) await ph.click('summary:has-text("Essensplan")');
+  const meal2 = ph.locator(`[data-d="${day2}"] input`); await meal2.fill('Lasagne'); await meal2.press('Enter');
+  await ph.locator(`[data-d="${day2}"] [data-a=zutaten]`).click(); await ph.waitForSelector('#zutf');
+  const fr = await ph.inputValue('#zutf [name=liste]'); assert.notEqual(fr, '', 'Liste mit passendem Einkaufstag vorgeschlagen');
+  await ph.selectOption('#zutf [name=liste]', ''); await ph.uncheck('#zutf [name=z1]'); await ph.click('#zutf [type=submit]');
+  await ph.waitForSelector('.toast:has-text("zusammengeführt")');
+  const hack = JSON.parse((await env.DB.prepare("SELECT data FROM docs WHERE data LIKE '%Hackfleisch%' AND data NOT LIKE '%\"done\":true%'").first()).data);
+  assert.equal(hack.menge, '1 kg', '500 g + 500 g'); assert.equal(hack.quellen.length, 2);
+  await ph.fill('#buyIn', '200g Hackfleisch'); await ph.press('#buyIn', 'Enter'); await ph.waitForTimeout(200);
+  const hack2 = JSON.parse((await env.DB.prepare("SELECT data FROM docs WHERE data LIKE '%Hackfleisch%' AND data NOT LIKE '%\"done\":true%'").first()).data); assert.equal(hack2.menge, '1,2 kg', 'Hand-Eintrag wird mitgezählt');
+  await ph.screenshot({ path: 'test/shot-zutaten.png', fullPage: true });
 
   // Offline im Laden: abhaken, später nachholen
   await ph.context().setOffline(true);
@@ -291,6 +308,22 @@ try {
   let bd = JSON.parse((await env.DB.prepare("SELECT data FROM docs WHERE data LIKE '%Bananen%'").first()).data); assert.equal(bd.done, false, 'noch nicht beim Server');
   await ph.context().setOffline(false); await ph.evaluate(() => window.dispatchEvent(new Event('online'))); await ph.waitForTimeout(800);
   bd = JSON.parse((await env.DB.prepare("SELECT data FROM docs WHERE data LIKE '%Bananen%'").first()).data); assert.equal(bd.done, true, 'nachgeholt');
+
+  // Erledigtes löschen: Aufgaben und Ideen
+  await ph.click('.tab[data-v=heute]'); await ph.click('[data-go=aufgaben]');
+  await ph.locator('.task:has-text("Winterreifen") input').first().click(); await ph.waitForTimeout(150);
+  await ph.click('summary:has-text("Zuletzt erledigt")');
+  await ph.locator('.task.done:has-text("Winterreifen") [data-a=del]').click(); await ph.waitForTimeout(150);
+  assert.equal(await ph.locator('.task:has-text("Winterreifen")').count(), 0, 'einzeln gelöscht');
+  if (await ph.locator('[data-a=deldone]').count()) { await ph.click('[data-a=deldone]'); await ph.click('[data-a=deldone]'); await ph.waitForTimeout(200); }
+  assert.equal(await ph.locator('summary:has-text("Zuletzt erledigt")').count(), 0, 'alle erledigten gelöscht');
+  await ph.click('.tab[data-v=ideen]');
+  if (!(await ph.isVisible('.topic:has-text("Weihnachten") [data-a=tdone]'))) await ph.click('.topic:has-text("Weihnachten") summary');
+  await ph.click('.topic:has-text("Weihnachten") [data-a=tdone]'); await ph.waitForTimeout(150);
+  await ph.click('summary:has-text("Erledigt (")'); if (!(await ph.isVisible('.topic:has-text("Weihnachten") [data-a=tdel]'))) await ph.click('.topic:has-text("Weihnachten") summary');
+  await ph.click('.topic:has-text("Weihnachten") [data-a=tdel]'); await ph.click('.topic:has-text("Weihnachten") [data-a=tdel]'); await ph.waitForTimeout(200);
+  assert.equal(await ph.locator('.topic:has-text("Weihnachten")').count(), 0, 'erledigte Idee gelöscht');
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM docs WHERE data LIKE '%Plätzchen%' AND deleted=0").first()).n, 0, 'Gedanken mit gelöscht');
 
   // Breiten
   const wide = await page(1280); await wide.goto(B); await wide.fill('[name=name]', 'Philippe'); await wide.fill('[name=password]', 'sicher123'); await wide.click('#af [type=submit]');

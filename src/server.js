@@ -788,6 +788,21 @@ return { ok: true };
 
 
 /* ---------------- Erfassen (Text oder Sprache -> Einträge) ---------------- */
+const QU={g:['g',1],gr:['g',1],gramm:['g',1],kg:['g',1000],kilo:['g',1000],ml:['ml',1],l:['ml',1000],liter:['ml',1000],stk:['Stk',1],'stück':['Stk',1],st:['Stk',1],x:['Stk',1],el:['EL',1],tl:['TL',1],pck:['Pck',1],packung:['Pck',1],packungen:['Pck',1],dose:['Dose',1],dosen:['Dose',1],bund:['Bund',1],becher:['Becher',1],flasche:['Flasche',1],flaschen:['Flasche',1],glas:['Glas',1],'gläser':['Glas',1],zehe:['Zehe',1],zehen:['Zehe',1],scheibe:['Scheibe',1],scheiben:['Scheibe',1]};
+const qNum=x=>x==='½'?0.5:x==='¼'?0.25:parseFloat(String(x).replace(',','.'));
+function qtyOf(s){const m=String(s||'').trim().match(/^(\d+(?:[.,]\d+)?|½|¼)\s*([A-Za-zäöüÄÖÜß]+)?\.?$/);if(!m)return null;const n=qNum(m[1]);if(!(n>0))return null;if(!m[2])return{n,u:'Stk'};const u=QU[m[2].toLowerCase()];return u?{n:n*u[1],u:u[0]}:null}
+function splitItem(t){
+  t=String(t||'').trim().replace(/\s+/g,' ');
+  const unit=w=>w?QU[w.replace(/\.$/,'').toLowerCase()]:null;
+  let m=t.match(/^(\d+(?:[.,]\d+)?|½|¼)\s*(.+)$/);
+  if(m){const n=qNum(m[1]);const w=m[2].match(/^([A-Za-zäöüÄÖÜß]+\.?)\s+(.+)$/);const u=w&&unit(w[1]);if(u)return{name:w[2],qty:{n:n*u[1],u:u[0]}};const u2=unit(m[2].split(' ')[0]);if(u2&&!w)return{name:m[2],qty:null};return{name:m[2],qty:{n,u:'Stk'}}}
+  m=t.match(/^(.+?)\s+(\d+(?:[.,]\d+)?|½|¼)\s*([A-Za-zäöüÄÖÜß]+\.?)?$/);
+  if(m){const u=unit(m[3]);if(!m[3]||u)return{name:m[1],qty:{n:qNum(m[2])*(u?u[1]:1),u:u?u[0]:'Stk'}}}
+  return{name:t,qty:null};
+}
+function addQty(a,b){if(!a)return b;if(!b)return a;return a.u===b.u?{n:a.n+b.n,u:a.u}:null}
+function fmtQty(q){if(!q)return'';let n=q.n,u=q.u;if(u==='g'&&n>=1000){n/=1000;u='kg'}if(u==='ml'&&n>=1000){n/=1000;u='l'}return(Math.round(n*100)/100).toLocaleString('de-DE')+' '+u}
+
 const WDN = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 const isD = (x) => /^\d{4}-\d\d-\d\d$/.test(String(x || ''));
 const isT = (x) => HHMM.test(String(x || ''));
@@ -909,9 +924,16 @@ async function capture(env, ctx, me, text) {
       continue;
     }
     if (art === 'einkauf') {
-      const ex = E.find((x) => x.data.kind === 'einkauf' && !x.data.done && String(x.data.titel).toLowerCase() === base.titel.toLowerCase());
-      if (ex) { lines.push({ text: 'Steht schon auf der Liste: ' + ex.data.titel }); continue; }
-      Object.assign(base, { done: false, menge: String(it.menge || '').slice(0, 40) });
+      const sp = splitItem(base.titel), qty = qtyOf(it.menge) || sp.qty;
+      base.titel = sp.name.slice(0, 80);
+      const ex = E.find((x) => x.data.kind === 'einkauf' && !x.data.done && !x.data.liste && splitItem(x.data.titel).name.toLowerCase() === base.titel.toLowerCase());
+      if (ex) {
+        const sum = addQty(qtyOf(ex.data.menge) || splitItem(ex.data.titel).qty, qty);
+        if (qty && sum) { ops.push({ op: 'update', coll: 'eintraege', id: ex.id, data: { menge: fmtQty(sum) } }); lines.push({ text: 'Menge erhöht: ' + ex.data.titel + ' (' + fmtQty(sum) + ')', open: 'e:' + ex.id }); }
+        else lines.push({ text: 'Steht schon auf der Liste: ' + ex.data.titel });
+        continue;
+      }
+      Object.assign(base, { done: false, menge: qty ? fmtQty(qty) : String(it.menge || '').slice(0, 40) });
       add('eintraege', id, base);
       lines.push({ text: 'Einkauf: ' + base.titel + (base.menge ? ' (' + base.menge + ')' : ''), open: 'e:' + id });
       continue;

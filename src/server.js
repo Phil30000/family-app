@@ -11,8 +11,8 @@ const SEED = __SEED__;
 
 const AREAS = ['termine', 'aufgaben', 'einkauf', 'essen', 'themen', 'pinnwand'];
 const KIND_AREA = { termin: 'termine', aufgabe: 'aufgaben', einkauf: 'einkauf', gedanke: 'themen', eingang: 'themen', nachricht: 'pinnwand' };
-const COLL_AREA = { themen: 'themen', serien: 'aufgaben', essen: 'essen' };
-const COLLS = ['eintraege', 'themen', 'serien', 'essen'];
+const COLL_AREA = { themen: 'themen', serien: 'aufgaben', essen: 'essen', infos: 'pinnwand' };
+const COLLS = ['eintraege', 'themen', 'serien', 'essen', 'infos'];
 const ROLES = ['admin', 'erwachsener', 'kind', 'gast', 'tablet'];
 const LEVELS = ['off', 'mine', 'view', 'edit'];
 const PRESETS = {
@@ -163,6 +163,7 @@ function canRead(u, coll, d) {
   return true;
 }
 function canWrite(u, coll, nd, od) {
+  if (coll === 'infos' && !adult(u)) return false; // Familien-Infos pflegen nur Erwachsene
   for (const d of [od, nd]) {
     if (!d) continue;
     const l = lvl(u, docArea(coll, d));
@@ -173,7 +174,7 @@ function canWrite(u, coll, nd, od) {
   }
   if (od && nd && od.by !== u.id && lvl(u, docArea(coll, od)) === 'mine') {
     const keys = new Set([...Object.keys(od), ...Object.keys(nd)]);
-    for (const k of keys) if (!['done', 'doneAt'].includes(k) && JSON.stringify(od[k]) !== JSON.stringify(nd[k])) return false;
+    for (const k of keys) if (!['done', 'doneAt', 'notizen'].includes(k) && JSON.stringify(od[k]) !== JSON.stringify(nd[k])) return false;
   }
   return true;
 }
@@ -592,6 +593,7 @@ async function onWrite(env, me, events) {
     const d = ev.data;
     if (ev.type === 'pin') await notify(env, users.filter((u) => canRead(u, 'eintraege', d)), 'Pinnwand · ' + me.name, d.text || d.titel, false);
     if (ev.type === 'vorschlag') await notify(env, users.filter((u) => adult(u) && lvl(u, 'termine') === 'edit'), 'Vorschlag von ' + me.name, d.titel + ' · ' + String(d.start || '').slice(0, 10).split('-').reverse().join('.'), false);
+    if (ev.type === 'kommentar') await notify(env, users.filter((u) => (u.id === d.by || u.id === d.fuer) && canRead(u, 'eintraege', d)), me.name + ' zu „' + String(d.titel || '').slice(0, 40) + '“', String((ev.note && ev.note.text) || '').slice(0, 200), false);
     if (ev.type === 'zuweisung') await notify(env, users.filter((u) => u.id === d.fuer && canRead(u, 'eintraege', d)), 'Neue Aufgabe von ' + me.name, d.titel, false);
   }
 }
@@ -670,6 +672,7 @@ async function applyOps(env, ctx, me, ops) {
       if (data.kind === 'nachricht' && !old) events.push({ type: 'pin', data });
       if (data.kind === 'termin' && data.vorschlag && (!old || !old.vorschlag)) events.push({ type: 'vorschlag', data });
       if (data.kind === 'aufgabe' && !data.done && data.fuer && data.fuer !== 'wir' && data.fuer !== me.id && (!old || old.fuer !== data.fuer)) events.push({ type: 'zuweisung', data });
+      if (old && Array.isArray(data.notizen) && data.notizen.length > (old.notizen || []).length) events.push({ type: 'kommentar', data, note: data.notizen[data.notizen.length - 1] });
     }
     if (o.coll === 'eintraege' && (data.kind === 'termin' || (old && old.kind === 'termin'))) {
       if (data.kind === 'termin') calTouch.add(o.id); else if (old) calGone.push(old);

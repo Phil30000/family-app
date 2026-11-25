@@ -10,9 +10,10 @@ const B = 'http://localhost:8799';
 const browser = await chromium.launch();
 const errors = [];
 const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date());
-async function page(w = 390) {
+async function page(w = 390, intro = false) {
   const ctx = await browser.newContext({ viewport: { width: w, height: 844 }, locale: 'de-DE', timezoneId: 'Europe/Berlin' });
   const p = await ctx.newPage();
+  if (!intro) await p.addInitScript(() => { const g = Storage.prototype.getItem; Storage.prototype.getItem = function (k) { return String(k).startsWith('fa-intro-') ? '1' : g.call(this, k); }; });
   p.on('pageerror', (e) => errors.push(e.message));
   p.on('console', (m) => { if (m.type() === 'error' && !/fonts\.g|ERR_|Failed to load resource/.test(m.text())) errors.push(m.text()); });
   return p;
@@ -196,6 +197,44 @@ try {
   await ph.click('#gear'); await ph.click('[data-a=qnew]'); await ph.waitForSelector('[aria-label="Dein persönlicher Link"]');
   const qlink = await ph.inputValue('[aria-label="Dein persönlicher Link"]'); assert.match(qlink, /\/q\//);
   const qr = await fetch(qlink.replace(/^https?:\/\/[^/]+/, B), { method: 'POST', body: 'Milch' }); assert.match(await qr.text(), /Milch/);
+
+  // Paket C: Woche/Tag, Suche, Kommentar, Ideen, Familien-Infos, Family Wall, Einführung
+  await ph.click('.tab[data-v=kalender]'); await ph.click('[data-a=calmode][data-m=woche]');
+  assert.equal(await ph.locator('.wday').count(), 7); await ph.click('[data-a=calnext]');
+  assert.ok(await ph.locator('.wday .ev:has-text("Training Max")').count() >= 1, 'Woche zeigt Serie');
+  await ph.screenshot({ path: 'test/shot-woche.png', fullPage: true });
+  await ph.click('[data-a=calmode][data-m=tag]'); assert.ok(await ph.locator('.calnav').count() === 1);
+  await ph.click('[data-a=calmode][data-m=liste]');
+  await ph.click('#find'); await ph.fill('#sq', 'Hecke'); await ph.waitForSelector('.card:has-text("Ideen (")');
+  await ph.fill('#sq', 'TÜV'); await ph.waitForSelector('.card:has-text("Aufgaben (")');
+  await ph.locator('.task:has-text("TÜV") .tb').first().click(); await ph.fill('#cmtf [name=c]', 'Termin beim TÜV ist Montag'); await ph.click('#cmtf [type=submit]');
+  await ph.waitForSelector('.cmt:has-text("Termin beim TÜV ist Montag")'); await ph.click('.sheet [data-close]');
+  await ph.click('.tab[data-v=ideen]'); await ph.click('.topic:has-text("Garten") summary'); await ph.click('.topic:has-text("Garten") [data-a=later]');
+  await ph.click('.sheet [data-n=m3]'); await ph.waitForSelector('.toast:has-text("Meldet sich am")');
+  await ph.screenshot({ path: 'test/shot-ideen.png', fullPage: true });
+  await ph.click('#gear'); await ph.click('[data-go=infos]'); await ph.click('[data-a=infoadd]');
+  await ph.fill('#infof [name=titel]', 'Kinderarzt Dr. Meier'); await ph.fill('#infof [name=text]', 'Tel. 0211 123456'); await ph.selectOption('#infof [name=kat]', 'Ärzte'); await ph.click('#infof [type=submit]');
+  await ph.waitForSelector('.info:has-text("Kinderarzt") a[href^="tel:"]');
+  await ph.click('[data-a=infoadd]'); await ph.fill('#infof [name=titel]', 'Bank'); await ph.fill('#infof [name=text]', 'PIN 1234'); await ph.click('#infof [type=submit]');
+  await ph.waitForSelector('.toast:has-text("gehören nicht in die App")'); await ph.click('.sheet [data-close]');
+  // Tablet mit Family Wall
+  await ph.click('#gear'); if (!(await ph.isVisible('#newu [data-k=name]'))) await ph.click('summary:has-text("Neues Mitglied")');
+  await ph.fill('#newu [data-k=name]', 'Küche'); await ph.selectOption('#newu [data-k=role]', 'tablet'); await ph.uncheck('#newu [data-k=profil]'); await ph.click('#newu [data-a=uadd]');
+  await ph.waitForSelector('#newu [data-k=link] input'); const tlink = await ph.inputValue('#newu [data-k=link] input');
+  const tab = await page(1024);
+  await tab.goto(tlink.replace(/^https?:\/\/[^/]+/, B)); await tab.fill('[name=password]', 'kueche-pw-1'); await tab.click('#af [type=submit]');
+  await tab.waitForSelector('.wall'); assert.deepEqual((await tab.locator('.tab').allTextContents()).map((x) => x.replace(/\d+/g, '').trim()), ['Wand', 'Kalender', 'Einkauf']);
+  assert.ok(await tab.locator('.pcol').count() >= 4, 'eine Spalte pro Person + Alle');
+  assert.ok(await tab.locator('.pcol:has-text("Lina")').count() === 1, 'Kind ohne iPhone hat eine Spalte');
+  assert.equal(await tab.locator('text=Hecke').count(), 0, 'keine Erwachsenen-Ideen auf dem Tablet');
+  await tab.screenshot({ path: 'test/shot-wand.png', fullPage: true });
+  // Breite Ansicht für Erwachsene
+  const wideP = await page(1280); await wideP.goto(B); await wideP.fill('[name=name]', 'Philippe'); await wideP.fill('[name=password]', 'sicher123'); await wideP.click('#af [type=submit]');
+  await wideP.waitForSelector('.cols'); await wideP.screenshot({ path: 'test/shot-ipad.png' });
+  // Einführung beim ersten Start
+  const fresh = await page(390, true); await fresh.goto(B); await fresh.fill('[name=name]', 'Philippe'); await fresh.fill('[name=password]', 'sicher123'); await fresh.click('#af [type=submit]');
+  await fresh.waitForSelector('.sheet:has-text("Willkommen")'); await fresh.screenshot({ path: 'test/shot-intro.png' });
+  await fresh.click('.sheet [data-a=startcap]'); await fresh.waitForSelector('#t');
 
   // Essensplan + Zutaten
   await ph.click('.tab[data-v=einkauf]'); await ph.click('summary:has-text("Essensplan")');

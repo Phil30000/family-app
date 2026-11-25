@@ -22,6 +22,7 @@ const closeToast = async (p) => { if (await p.locator('.toast').count()) await p
 async function capture(p, text, waitFor) {
   await closeToast(p);
   await p.click('#fab'); await p.waitForSelector('#t');
+  assert.ok(!/object/.test(await p.inputValue('#t')), 'Eingabefeld ohne Fremdtext');
   await p.fill('#t', text); await p.click('#go');
   await p.waitForSelector(waitFor ? `.toast:has-text("${waitFor}")` : '.toast');
   const t = (await p.textContent('.toast')).replace(/\s+/g, ' ');

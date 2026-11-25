@@ -758,7 +758,7 @@ $('#sheetRoot').addEventListener('click',ev=>{if(ev.target.id==='shade'||ev.targ
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&$('#shade'))closeSheet()});
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null;
 function openCapture(pre){
-  const draft=pre||LS.get('fa-draft','');
+  let draft=typeof pre==='string'?pre:LS.get('fa-draft','');if(typeof draft!=='string'||/^\[object /.test(draft)){draft='';LS.set('fa-draft','')}
   sheet(`<h2>Was gibt es?<button class="x" data-close aria-label="Schließen">×</button></h2><form id="cap"><textarea id="t" placeholder="Zahnarzt Dienstag 15 Uhr. Milch und Brot. Conny muss den TÜV machen." aria-label="Neuer Eintrag" enterkeyhint="send">${esc(draft)}</textarea><div class="row" style="margin-top:10px">${SR?`<button class="mic" type="button" id="mic" aria-label="Sprechen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>`:''}<span class="hint" id="st">${SR?'Mikrofon antippen und sprechen.':'Tipp: Mikrofon der Tastatur antippen und sprechen.'}</span><button class="btn main" id="go" type="submit">Merken</button></div></form>`);
   const t=$('#t');setTimeout(()=>{t.focus();t.setSelectionRange(t.value.length,t.value.length)},60);
   t.addEventListener('input',()=>LS.set('fa-draft',t.value));
@@ -984,7 +984,7 @@ $('#counts').addEventListener('click',ev=>{const b=ev.target.closest('[data-go]'
 $('#find').addEventListener('click',()=>{go('suche');setTimeout(()=>{const i=$('#sq');if(i)i.focus()},50)});
 let rsT=null;window.addEventListener('resize',()=>{clearTimeout(rsT);rsT=setTimeout(render,200)});
 $('#gear').addEventListener('click',async()=>{go('mehr');try{quickExists=(await api('/api/token')).exists;if(window.PublicKeyCredential)fidCount=(await api('/api/passkey')).count;render()}catch(e){}});
-$('#fab').addEventListener('click',openCapture);
+$('#fab').addEventListener('click',()=>openCapture());
 let pressT=null,pressed=false;
 $('#p').addEventListener('pointerdown',ev=>{const t=ev.target.closest('[data-buy]');if(!t)return;pressed=false;clearTimeout(pressT);pressT=setTimeout(()=>{pressed=true;openItem('e:'+t.dataset.buy)},550)});
 ['pointerup','pointercancel','pointerleave'].forEach(n=>$('#p').addEventListener(n,()=>clearTimeout(pressT)));

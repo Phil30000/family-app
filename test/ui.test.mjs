@@ -159,6 +159,28 @@ try {
   await ph.locator('.ev.prop').first().click(); await ph.click('.sheet [data-a=approve]'); await ph.waitForTimeout(300); await flush();
   assert.equal(calls.events.size, before + 1, 'bestätigter Vorschlag im Kalender');
 
+  // Paket A: Neu-Markierung, Umwandeln, Profil ohne Anmeldung, Farben
+  await ph.evaluate(() => { localStorage.setItem('fa-seen-' + 'x', '1'); });
+  await co.reload(); await co.waitForSelector('.tab[data-v=heute]');
+  await ph.waitForTimeout(50);
+  await capture(ph, 'Conny muss den TÜV machen', 'TÜV');
+  await co.reload(); await co.waitForSelector('.tab[data-v=heute]'); await co.waitForTimeout(500);
+  await co.waitForSelector('.card:has-text("Neu seit deinem letzten Besuch")');
+  assert.match(await co.textContent('.card:has-text("Neu seit")'), /TÜV machen/);
+  assert.ok(await co.locator('.task.new').count() >= 1, 'neue Aufgabe markiert');
+  assert.ok(await co.locator('.task i.dot').count() >= 1, 'Farbpunkt der Person');
+  await co.click('[data-a=seen]'); await co.waitForTimeout(100);
+  assert.equal(await co.locator('.card:has-text("Neu seit")').count(), 0);
+  await ph.click('.tab[data-v=kalender]'); await ph.locator('.ev:has-text("Zahnarzt")').first().click();
+  await ph.selectOption('.sheet [name=kind]', 'aufgabe'); await ph.waitForTimeout(300);
+  assert.equal(await ph.inputValue('.sheet [name=faellig]'), '2026-12-01', 'Datum wird übernommen');
+  await ph.click('.sheet [data-close]');
+  const conv = JSON.parse((await env.DB.prepare("SELECT data FROM docs WHERE data LIKE '%Zahnarzt%' AND data LIKE '%aufgabe%'").first()).data); assert.equal(conv.kind, 'aufgabe');
+  await ph.click('#gear'); if (!(await ph.isVisible('#newu [data-k=name]'))) await ph.click('summary:has-text("Neues Mitglied")');
+  await ph.fill('#newu [data-k=name]', 'Lina'); await ph.check('#newu [data-k=profil]'); await ph.click('#newu [data-a=uadd]');
+  await ph.waitForSelector('#newu :text("Lina ist angelegt")');
+  await ph.screenshot({ path: 'test/shot-einstellungen2.png', fullPage: true });
+
   // Essensplan + Zutaten
   await ph.click('.tab[data-v=einkauf]'); await ph.click('summary:has-text("Essensplan")');
   const meal = ph.locator(`[data-d="${today}"] input`); await meal.fill('Lasagne'); await meal.press('Enter');

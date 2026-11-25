@@ -1,4 +1,4 @@
-const SHELL = 'fa-shell-v2';
+const SHELL = 'fa-shell-v3';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['/', '/icon-180.png', '/manifest.webmanifest'])).catch(() => {}));
   self.skipWaiting();
@@ -14,6 +14,7 @@ self.addEventListener('push', (e) => {
       const r = await fetch('/api/notify', { credentials: 'include', cache: 'no-store' });
       if (r.ok) { const d = await r.json(); title = d.title || title; body = d.body || body; tag = d.tag || tag; }
     } catch (x) {}
+    try { for (const c of await self.clients.matchAll({ type: 'window', includeUncontrolled: true })) c.postMessage('pull'); } catch (x) {}
     await self.registration.showNotification(title, { body, icon: '/icon-180.png', badge: '/icon-180.png', tag, data: { url: '/' } });
   })());
 });

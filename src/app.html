@@ -38,7 +38,7 @@ button{font:inherit;color:inherit}
 .count.hot b{color:#ffd2c4}
 main{max-width:640px;margin:0 auto;padding:12px 14px calc(var(--bar) + 88px)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 14px;margin:0 0 12px}
-.card>h2{display:flex;align-items:center;gap:8px;margin:10px 0 2px;font-size:13px;font-weight:700;color:var(--soft);text-transform:none}
+.card>h2{display:flex;align-items:center;gap:8px;margin:10px 0 2px;font-size:14px;font-weight:700;color:var(--soft);text-transform:none}
 .card>h2 .more{margin-left:auto}
 .pin{background:var(--pin);color:var(--pinInk);border-radius:14px;padding:10px 12px 10px 14px;margin:0 0 10px;display:flex;gap:10px;align-items:flex-start}
 .pin p{margin:0;flex:1;font-size:16px}
@@ -48,23 +48,24 @@ main{max-width:640px;margin:0 auto;padding:12px 14px calc(var(--bar) + 88px)}
 .ev:last-child{border-bottom:0}
 .ev .tm{font-weight:700;color:var(--blue);font-size:15px}
 .ev .tt{font-size:16px}
-.ev .sm{display:block;font-size:12px;color:var(--soft)}
+.ev .sm{display:block;font-size:13.5px;color:var(--soft)}
 .ev.ext .tm{color:var(--soft)}
 .ev.prop .tt{font-style:italic}
-.task{display:flex;gap:12px;align-items:center;min-height:48px;border-bottom:1px solid var(--line)}
+.task{display:flex;gap:12px;align-items:center;min-height:54px;border-bottom:1px solid var(--line)}
 .task:last-child{border-bottom:0}
 .task input{width:24px;height:24px;accent-color:var(--ok);flex:none;margin:0}
 .task .tb{flex:1;border:0;background:none;text-align:left;padding:8px 0;cursor:pointer}
 .task .tt{display:block;font-size:16px}
-.task .sm{display:block;font-size:12px;color:var(--soft)}
+.task .sm{display:block;font-size:13.5px;color:var(--soft)}
 .task.done .tt{text-decoration:line-through;color:var(--soft)}
 .late{color:var(--due)!important;font-weight:700}
 .empty{padding:8px 0 10px;margin:0;color:var(--soft);font-size:15px}
-.link{background:none;border:0;padding:8px 0;color:var(--blue);font-weight:700;font-size:14px;cursor:pointer}
+.link{background:none;border:0;padding:10px 0;min-height:44px;color:var(--blue);font-weight:700;font-size:14px;cursor:pointer}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.btn{min-height:42px;padding:0 16px;border-radius:999px;border:1.5px solid currentColor;background:transparent;font-weight:700;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.btn{min-height:44px;padding:0 16px;border-radius:999px;border:1.5px solid currentColor;background:transparent;font-weight:700;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.btn{color:inherit}a.btn{color:var(--ink)}
 .btn.main{background:#2f5d84;color:#fff;border-color:#2f5d84}
-.btn.sm{min-height:36px;padding:0 12px;font-size:14px;border-width:1px}
+.btn.sm{min-height:40px;padding:0 14px;font-size:14.5px;border-width:1px}
 .btn.warn{color:var(--due)}
 .btn[aria-pressed=true]{background:var(--blue);border-color:var(--blue);color:var(--card)}
 .btn[disabled]{opacity:.5}
@@ -112,7 +113,7 @@ details[open]>summary:before{transform:rotate(90deg)}
 .lines li{padding:2px 0}
 .lines span{color:var(--soft);font-size:12px}
 .search{width:100%;min-height:44px;margin:4px 0 8px;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:16px Figtree,system-ui,sans-serif}
-.meta{font-size:12px;color:var(--soft)}
+.meta{font-size:13.5px;color:var(--soft)}
 .toast{position:fixed;left:50%;bottom:calc(var(--bar) + 12px);transform:translateX(-50%);width:min(560px,calc(100% - 28px));background:#16324a;color:#eef5fb;border-radius:14px;padding:10px 12px 10px 14px;box-shadow:0 12px 30px -12px rgba(0,0,0,.5);z-index:7;display:flex;gap:8px;align-items:center}
 .toast ul{margin:0;padding:0;list-style:none;flex:1;font-size:14px}
 .toast .btn{color:#bcd8f0;min-height:34px}
@@ -130,6 +131,15 @@ details[open]>summary:before{transform:rotate(90deg)}
 .areas label{display:grid;gap:2px;font-size:12px;color:var(--soft)}
 .areas select,.user select{min-height:38px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);font:15px Figtree,system-ui,sans-serif;padding:0 8px}
 .back{display:inline-flex;gap:4px;align-items:center;margin:0 0 8px}
+i.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:1px;font-style:normal}
+.new{position:relative}
+.new:after{content:'neu';position:absolute;right:0;top:8px;background:var(--due);color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:1px 7px}
+.ev.new:after{top:10px}
+.warn-card{background:#fde8e1;color:#7a2a12;border-radius:14px;padding:10px 14px;margin:0 0 10px;font-size:15px}
+@media(prefers-color-scheme:dark){.warn-card{background:#3a1d14;color:#ffd2c4}}
+.swatches{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 10px}
+.sw{width:36px;height:36px;border-radius:50%;border:3px solid transparent;cursor:pointer}
+.sw[aria-pressed=true]{border-color:var(--ink)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -165,9 +175,10 @@ const uid=()=>'e-'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)
 const WD=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
 const RH={woechentlich:'jede Woche',monatlich:'jeden Monat',jaehrlich:'jedes Jahr'};
 const AREAS=[['termine','Termine'],['aufgaben','Aufgaben'],['einkauf','Einkauf'],['essen','Essen'],['themen','Ideen'],['pinnwand','Pinnwand']];
-const ROLES=[['admin','Admin'],['erwachsener','Erwachsener'],['kind','Kind'],['gast','Gast']];
+const ROLES=[['admin','Admin'],['erwachsener','Erwachsener'],['kind','Kind'],['gast','Gast'],['tablet','Familien-Tablet']];
+const COLORS=['#2f6db0','#c8613a','#7d5ab8','#1f8a80','#b4457f','#a07a12','#55697d','#8a5a3a'];
 const LEVELS=[['off','Aus'],['mine','Nur meins'],['view','Alles sehen'],['edit','Alles bearbeiten']];
-const PRESETS={admin:{termine:'edit',aufgaben:'edit',einkauf:'edit',essen:'edit',themen:'edit',pinnwand:'edit'},erwachsener:{termine:'edit',aufgaben:'edit',einkauf:'edit',essen:'edit',themen:'edit',pinnwand:'edit'},kind:{termine:'mine',aufgaben:'mine',einkauf:'edit',essen:'view',themen:'off',pinnwand:'edit'},gast:{termine:'view',aufgaben:'off',einkauf:'off',essen:'view',themen:'off',pinnwand:'view'}};
+const PRESETS={admin:{termine:'edit',aufgaben:'edit',einkauf:'edit',essen:'edit',themen:'edit',pinnwand:'edit'},erwachsener:{termine:'edit',aufgaben:'edit',einkauf:'edit',essen:'edit',themen:'edit',pinnwand:'edit'},kind:{termine:'mine',aufgaben:'mine',einkauf:'edit',essen:'view',themen:'off',pinnwand:'edit'},gast:{termine:'view',aufgaben:'off',einkauf:'off',essen:'view',themen:'off',pinnwand:'view'},tablet:{termine:'view',aufgaben:'edit',einkauf:'edit',essen:'view',themen:'off',pinnwand:'edit'}};
 const SICHT=[['familie','Familie'],['erwachsene','Nur Erwachsene'],['privat','Nur ich']];
 const KIND_AREA={termin:'termine',aufgabe:'aufgaben',einkauf:'einkauf',gedanke:'themen',eingang:'themen',nachricht:'pinnwand',serie:'aufgaben',essen:'essen'};
 const REMIND=[['aus','Keine Erinnerung'],['15','15 Minuten vorher'],['30','30 Minuten vorher'],['60','1 Stunde vorher'],['120','2 Stunden vorher'],['1440','1 Tag vorher']];
@@ -191,7 +202,7 @@ const ICON={
  einkauf:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L21 8H6.2"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/></svg>',
  ideen:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>'
 };
-let ME=null,USERS=[],CAL=null,meId=null,meName='';
+let ME=null,USERS=[],CAL=null,meId=null,meName='',FAMILY='',credInfo=null,backups=null,pushChecked=false;
 const openD=new Set();const dk=k=>` data-keep="${k}"${openD.has(k)?' open':''}`;
 let E=[],T=[],S=[],F=[],X=[],XERR='',view='heute',sub='',q='',mineOnly=true,adminUsers=null,calList=null,pushOn=false,openTopics=new Set();
 
@@ -203,12 +214,12 @@ async function api(path,body,method){
   return d;
 }
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const store={eintraege:new Map(),themen:new Map(),serien:new Map(),essen:new Map()};
+const store={eintraege:new Map(),themen:new Map(),serien:new Map(),essen:new Map()};const META=new Map();let newSince=0;
 const subs={};let since=0,pulling=false,queue=LS.get('fa-q',[]);
 const snap=c=>[...store[c].entries()].map(([id,data])=>({id,data}));
 function emit(c){(subs[c]||[]).forEach(f=>f(snap(c)))}
-function saveCache(){LS.set('fa-cache',{since,docs:Object.fromEntries(Object.entries(store).map(([c,m])=>[c,[...m.entries()]]))})}
-function loadCache(){const c=LS.get('fa-cache',null);if(!c)return false;for(const[k,arr]of Object.entries(c.docs||{}))if(store[k])arr.forEach(([id,d])=>store[k].set(id,d));since=c.since||0;return true}
+function saveCache(){LS.set('fa-cache',{since,meta:[...META.entries()],docs:Object.fromEntries(Object.entries(store).map(([c,m])=>[c,[...m.entries()]]))})}
+function loadCache(){const c=LS.get('fa-cache',null);if(!c)return false;for(const[k,arr]of Object.entries(c.docs||{}))if(store[k])arr.forEach(([id,d])=>store[k].set(id,d));(c.meta||[]).forEach(([k,v])=>META.set(k,v));since=c.since||0;return true}
 async function flushQueue(){
   while(queue.length){const op=queue[0];
     try{await api('/api/write',{ops:[op]})}catch(e){if(!e.status)return false;/* vom Server abgelehnt: verwerfen */}
@@ -222,7 +233,7 @@ async function pull(full){
     const d=await api('/api/data?since='+(full?0:since));
     if(full)Object.values(store).forEach(m=>m.clear());
     const touched=new Set(full?Object.keys(store):[]);
-    for(const x of d.docs){if(!store[x.coll])continue;if(x.deleted)store[x.coll].delete(x.id);else store[x.coll].set(x.id,x.data);touched.add(x.coll)}
+    for(const x of d.docs){if(!store[x.coll])continue;if(x.deleted)store[x.coll].delete(x.id);else{store[x.coll].set(x.id,x.data);if(x.u)META.set(x.coll+':'+x.id,x.u)}touched.add(x.coll)}
     if(d.now)since=d.now;touched.forEach(emit);banner('');saveCache();
   }catch(e){if(e.status===401)location.reload();else banner('Offline. Änderungen werden nachgeholt, sobald wieder Netz da ist.')}
   finally{pulling=false}
@@ -260,6 +271,9 @@ const canWrite=a=>['edit','mine'].includes(lvl(a));
 const fullEdit=(d,a)=>lvl(a)==='edit'||(lvl(a)==='mine'&&d.by===meId);
 const banner=t=>{const b=$('#banner');b.textContent=t||'';b.hidden=!t};
 const nameOf=id=>{const u=USERS.find(x=>x.id===id);return u?u.name:''};
+const colorOf=id=>{const i=USERS.findIndex(x=>x.id===id);return i<0?'':(USERS[i].color||COLORS[i%COLORS.length])};
+const dot=id=>{const c=colorOf(id);return c?`<i class="dot" style="background:${c}" title="${esc(nameOf(id))}"></i>`:''};
+const isNew=(coll,d)=>!!newSince&&d&&d.by&&d.by!==meId&&(META.get(coll+':'+d.id)||0)>newSince;
 const who=id=>id&&id===meId?'Ich':nameOf(id);
 const others=()=>USERS.filter(u=>u.id!==meId);
 const isMine=x=>{const f=String(x.fuer||'wir');return f==='wir'||f===meId||(f.startsWith('partner-of:')&&f!=='partner-of:'+meId)};
@@ -295,12 +309,14 @@ function evRow(e){
   const last=e.ganztags&&e.ende?addDays(e.ende.slice(0,10),-1):String(e.ende||'').slice(0,10);
   const span=last&&last>String(e.start).slice(0,10)?'bis '+fmtDay(last):'';
   const sm=[span,e.ext?'iPhone-Kalender':'',e.vorschlag?'Vorschlag von '+(who(e.by)||'?'):'',!e.ext&&e.fuer&&e.fuer!=='wir'?'für '+fuerLabel(e):'',e.ort||''].filter(Boolean).join(' · ');
-  return `<button class="ev${e.ext?' ext':''}${e.vorschlag?' prop':''}" data-open="${e.ext?'x:':'e:'}${esc(e.id)}"><span class="tm">${t==='ganztags'?'<small>ganzt.</small>':esc(t)}</span><span><span class="tt">${esc(e.titel)}</span>${sm?`<span class="sm">${esc(sm)}</span>`:''}</span></button>`;
+  const who1=!e.ext&&(fuerKey(e)!=='wir'?fuerKey(e):'');
+  return `<button class="ev${e.ext?' ext':''}${e.vorschlag?' prop':''}${!e.ext&&isNew('eintraege',e)?' new':''}" data-open="${e.ext?'x:':'e:'}${esc(e.id)}"><span class="tm">${t==='ganztags'?'<small>ganzt.</small>':esc(t)}</span><span><span class="tt">${who1?dot(who1):''}${esc(e.titel)}</span>${sm?`<span class="sm">${esc(sm)}</span>`:''}</span></button>`;
 }
 function taskRow(e){
   const late=!e.done&&e.faellig&&e.faellig<t0();const w=canWrite('aufgaben');
   const sm=[fuerKey(e)!=='wir'?fuerLabel(e):'',e.faellig?(late?'seit '+relDay(e.faellig):relDay(e.faellig))+(e.zeit?' '+e.zeit:''):''].filter(Boolean).join(' · ');
-  return `<div class="task${e.done?' done':''}" data-e="${esc(e.id)}"><input type="checkbox" data-a="tick" aria-label="${esc(e.titel)} erledigt"${e.done?' checked':''}${w?'':' disabled'}><button class="tb" data-open="e:${esc(e.id)}"><span class="tt">${esc(e.titel)}</span>${sm?`<span class="sm${late?' late':''}">${esc(sm)}</span>`:''}</button></div>`;
+  const fk=fuerKey(e);
+  return `<div class="task${e.done?' done':''}${isNew('eintraege',e)?' new':''}" data-e="${esc(e.id)}"><input type="checkbox" data-a="tick" aria-label="${esc(e.titel)} erledigt"${e.done?' checked':''}${w?'':' disabled'}><button class="tb" data-open="e:${esc(e.id)}"><span class="tt">${fk!=='wir'?dot(fk):''}${esc(e.titel)}</span>${sm?`<span class="sm${late?' late':''}">${esc(sm)}</span>`:''}</button></div>`;
 }
 function serieRow(s){
   const late=s.next&&s.next<t0();
@@ -309,8 +325,22 @@ function serieRow(s){
 const card=(title,body,more)=>`<section class="card"><h2>${title}${more||''}</h2>${body}</section>`;
 
 /* ---------- Ansichten ---------- */
+function newItems(){
+  if(!newSince)return[];
+  const out=[];
+  for(const e of E){if(!isNew('eintraege',e))continue;if(e.kind==='nachricht'||e.kind==='eingang')continue;out.push(e)}
+  for(const t of T){const m=META.get('themen:'+t.id)||0;if(m>newSince&&t.by&&t.by!==meId)out.push(Object.assign({kind:'thema',titel:t.name},t))}
+  return out.sort((a,b)=>(META.get('eintraege:'+b.id)||0)-(META.get('eintraege:'+a.id)||0));
+}
+const KL={termin:'Termin',aufgabe:'Aufgabe',einkauf:'Einkauf',gedanke:'Idee',thema:'Idee'};
 function vHeute(){
   let h='';
+  for(const w of (ME.warnings||[]))h+=`<div class="warn-card" role="alert">${esc(w)} <button class="link" data-go="mehr" style="color:inherit;text-decoration:underline;min-height:0;padding:0">Zu den Einstellungen</button></div>`;
+  const standalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  if(standalone&&!pushOn&&pushChecked&&'PushManager'in window&&ME.role!=='tablet')h+=`<div class="warn-card">Mitteilungen sind auf diesem iPhone aus. Ohne sie verpasst du Erinnerungen. <button class="link" data-a="pushon" style="color:inherit;text-decoration:underline;min-height:0;padding:0">Einschalten</button></div>`;
+  const nw=newItems();
+  if(nw.length){const buy=nw.filter(e=>e.kind==='einkauf');const rest=nw.filter(e=>e.kind!=='einkauf');
+    h+=card(`Neu seit deinem letzten Besuch (${nw.length})`,rest.slice(0,6).map(e=>`<button class="ev" data-open="${e.kind==='thema'?'t:':'e:'}${esc(e.id)}"><span class="tm"><small>${esc(KL[e.kind]||'')}</small></span><span><span class="tt">${esc(e.titel)}</span><span class="sm">von ${esc(who(e.by)||'?')}</span></span></button>`).join('')+(buy.length?`<button class="link" data-go="einkauf">${buy.length} neu auf der Einkaufsliste: ${esc(buy.slice(0,4).map(e=>e.titel).join(', '))}${buy.length>4?' …':''}</button>`:'')+`<div class="row" style="padding-bottom:8px"><button class="btn sm" data-a="seen">Alles gesehen</button></div>`)}
   for(const e of unreadPins())h+=`<div class="pin" data-e="${esc(e.id)}"><p><small>Pinnwand · ${esc(who(e.by)||'')} · ${esc(relDay(String(e.at||'').slice(0,10)))}</small>${esc(e.text||e.titel)}</p>${canWrite('pinnwand')||e.by===meId?`<button class="x" data-a="pinread" aria-label="Gelesen, ausblenden">×</button>`:''}</div>`;
   const ps=proposals();
   if(ps.length)h+=card('Vorschläge zum Bestätigen',ps.map(evRow).join(''));
@@ -405,21 +435,28 @@ function vMehr(){
   const p=ME.prefs||{};
   let h=`<button class="link back" data-go="heute">‹ Heute</button>`;
   h+=card('Mitteilungen',pushBox()+`<form id="prefs"><div class="two"><label class="f">Morgen-Übersicht Mo–Fr<input type="time" name="morgenWerktag" value="${esc(p.morgenWerktag||'06:30')}"></label><label class="f">Sa und So<input type="time" name="morgenWochenende" value="${esc(p.morgenWochenende||'09:00')}"></label></div><div class="two"><label class="f">Ruhezeit ab<input type="time" name="ruheVon" value="${esc(p.ruheVon||'22:00')}"></label><label class="f">bis<input type="time" name="ruheBis" value="${esc(p.ruheBis||'06:30')}"></label></div><p class="meta" style="margin:0 0 10px">In der Ruhezeit schweigen Pinnwand, Vorschläge und neue Aufgaben. Termine und Aufgaben mit Uhrzeit melden sich trotzdem.</p><button class="btn sm main" type="submit">Zeiten speichern</button></form><div style="height:10px"></div>`);
+  const myc=colorOf(meId);
+  h+=card('Meine Farbe',`<div class="swatches">${COLORS.map(c=>`<button class="sw" data-a="mycolor" data-c="${c}" style="background:${c}" aria-label="Farbe wählen" aria-pressed="${c===myc}"></button>`).join('')}</div>`);
   if(isAdmin())h+=vFamilie();
   h+=card('Konto',`<p class="empty">Angemeldet als ${esc(meName)}</p><div class="row" style="margin-bottom:12px"><button class="btn sm" data-a="pw">Passwort ändern</button><button class="btn sm" data-a="logout">Abmelden</button></div>`);
   return h;
 }
 function vFamilie(){
   if(!adminUsers){loadAdmin();return card('Familie','<p class="empty">Lädt …</p>')}
-  const areaBoxes=(u,role)=>{const pr=u?u.perms:PRESETS[role||'erwachsener'];const r=u?u.role:role;return `<div class="areas" data-k="perms"${r==='admin'?' hidden':''}>${AREAS.map(([k,l])=>`<label>${l}<select data-area="${k}">${opts(LEVELS,pr[k])}</select></label>`).join('')}</div>`};
+  const areaBoxes=(u,role)=>{const pr=u?u.perms:PRESETS[role||'erwachsener'];const r=u?u.role:role;return `<details style="margin:4px 0"${r==='admin'?' hidden':''} data-k="permwrap"><summary>Rechte im Detail</summary><div class="areas" data-k="perms">${AREAS.map(([k,l])=>`<label>${l}<select data-area="${k}">${opts(LEVELS,pr[k])}</select></label>`).join('')}</div></details>`};
+  const swatch=(cur)=>`<div class="swatches">${COLORS.map(c=>`<button type="button" class="sw" data-a="ucolor" data-c="${c}" style="background:${c}" aria-label="Farbe" aria-pressed="${c===cur}"></button>`).join('')}</div>`;
   const roleSel=u=>`<select data-k="role" aria-label="Rolle">${opts(ROLES,u?u.role:'kind')}</select>`;
   const RL=Object.fromEntries(ROLES);
-  let b=adminUsers.map(u=>`<details class="user topic" data-u="${esc(u.id)}"${dk('u'+u.id)}><summary>${esc(u.name)}${u.id===meId?' (du)':''}<span>${esc(RL[u.role]||'')} · ${u.active?(u.invited?'Einladung offen':'aktiv'):'gesperrt'}</span></summary><div class="row" style="margin-top:6px">${roleSel(u)}<label class="meta" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="active"${u.active?' checked':''}>Zugang aktiv</label></div>${areaBoxes(u)}<div class="row"><button class="btn sm" data-a="usave">Speichern</button><button class="btn sm" data-a="uinvite">${u.invited?'Link neu':'Passwort zurücksetzen'}</button>${u.id===meId?'':'<button class="btn sm warn" data-a="udel">Löschen</button>'}</div><div data-k="link" style="margin-bottom:8px"></div></details>`).join('');
-  b+=`<details style="padding-bottom:6px"${dk('newu')}><summary>Neues Mitglied einladen</summary><div class="user" id="newu" style="border:0"><div class="row"><input class="field" data-k="name" placeholder="Name" aria-label="Name" style="flex:1 1 10em">${roleSel(null)}</div>${areaBoxes(null,'kind')}<p class="meta">„Nur meins“: sieht nur, was ihm zugewiesen ist oder was es selbst angelegt hat. Termine von Kindern sind Vorschläge, bis ein Erwachsener sie bestätigt.</p><div class="row"><button class="btn sm main" data-a="uadd">Einladen</button></div><div data-k="link"></div></div></details>`;
-  let c=CAL?`<p class="empty">Verbunden mit „${esc(CAL)}“.${XERR?' Lesen gerade nicht möglich: '+esc(XERR):''}</p>`:'<p class="empty">Noch kein Kalender verbunden.</p>';
+  let b=adminUsers.map(u=>`<details class="user topic" data-u="${esc(u.id)}"${dk('u'+u.id)}><summary>${dot(u.id)}${esc(u.name)}${u.id===meId?' (du)':''}<span>${esc(RL[u.role]||'')} · ${u.profil?'Profil ohne Anmeldung':u.active?(u.invited?'Einladung offen':'aktiv'):'gesperrt'}</span></summary>${swatch(u.color)}<div class="row" style="margin-top:6px">${roleSel(u)}<label class="meta" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="active"${u.active?' checked':''}>Zugang aktiv</label></div>${areaBoxes(u)}<div class="row"><button class="btn sm" data-a="usave">Speichern</button><button class="btn sm" data-a="uinvite">${u.profil?'Doch mit Anmeldung':u.invited?'Link neu':'Passwort zurücksetzen'}</button>${u.id===meId?'':'<button class="btn sm warn" data-a="udel">Löschen</button>'}</div><div data-k="link" style="margin-bottom:8px"></div></details>`).join('');
+  b+=`<details style="padding-bottom:6px"${dk('newu')}><summary>Neues Mitglied einladen</summary><div class="user" id="newu" style="border:0"><div class="row"><input class="field" data-k="name" placeholder="Name" aria-label="Name" style="flex:1 1 10em">${roleSel(null)}</div><label class="meta" style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" data-k="profil">Ohne eigenes Gerät (Profil, z. B. für jüngere Kinder): bekommt Aufgaben, sieht sie auf dem Familien-Tablet</label>${areaBoxes(null,'kind')}<p class="meta">Kinder sehen nur, was ihnen zugewiesen ist oder was sie selbst angelegt haben. Ihre Termine sind Vorschläge, bis ein Erwachsener bestätigt. „Familien-Tablet“ ist ein gemeinsames Gerät in der Küche: zeigt alle Familienaufgaben, aber keine Erwachsenen-Themen.</p><div class="row"><button class="btn sm main" data-a="uadd">Hinzufügen</button></div><div data-k="link"></div></div></details>`;
+  const fam=`<form id="famname" class="row" style="margin:6px 0 10px"><input class="field" name="name" placeholder="z. B. Familie Hitzbleck" value="${esc(FAMILY)}" aria-label="Name der Familie" style="flex:1 1 12em"><button class="btn sm" type="submit">Speichern</button></form>`;
+  const cr=credInfo?(credInfo.configured?`<p class="meta">iCloud-Zugang: ${esc(credInfo.user)}${credInfo.fromEnv?' (aus Cloudflare)':' (verschlüsselt gespeichert)'}</p>`:'<p class="meta">Noch kein iCloud-Zugang hinterlegt.</p>'):'';
+  const credForm=`<details${dk('cred')}><summary>${credInfo&&credInfo.configured?'iCloud-Zugang ändern':'iCloud-Zugang eintragen'}</summary><form id="credf"><p class="meta">Apple verlangt für fremde Apps ein eigenes Passwort. So geht's: <a href="https://account.apple.com" target="_blank" rel="noopener">account.apple.com</a> › Anmelden und Sicherheit › App-spezifische Passwörter › „+“, Name „Family App“. Das Passwort wird verschlüsselt gespeichert und nie wieder angezeigt.</p><label class="f">Apple-ID (E-Mail)<input name="user" type="email" autocomplete="off" required></label><label class="f">App-spezifisches Passwort<input name="pass" type="password" autocomplete="off" placeholder="xxxx-xxxx-xxxx-xxxx" required></label><button class="btn sm main" type="submit">Prüfen und speichern</button></form></details>`;
+  let c=cr+credForm+(CAL?`<p class="empty">Verbunden mit „${esc(CAL)}“.${XERR?' Lesen gerade nicht möglich: '+esc(XERR):''}</p>`:'<p class="empty">Noch kein Kalender verbunden.</p>');
   if(calList)c+=calList.length?'<div class="row">'+calList.map((x,i)=>`<button class="btn sm" data-a="calpick" data-i="${i}">${esc(x.name)}</button>`).join('')+'</div>':'<p class="empty">Keine Kalender gefunden.</p>';
   c+=`<div class="row" style="margin:8px 0 12px"><button class="btn sm" data-a="calfind">${CAL?'Anderen wählen':'Kalender suchen'}</button>${CAL?'<button class="btn sm" data-a="calsync">Jetzt abgleichen</button><button class="btn sm warn" data-a="caloff">Trennen</button>':''}</div>`;
-  return card('Familie',b)+card('iPhone-Kalender',c);
+  const bk=`<p class="meta">Jeden Sonntag wird automatisch eine Sicherung angelegt (die letzten 6 bleiben). Zusätzlich kannst du eine Datei auf dein Gerät laden.</p><div class="row" style="margin-bottom:8px"><a class="btn sm" href="/api/admin/export" download>Sicherung herunterladen</a><label class="btn sm" style="cursor:pointer">Aus Datei wiederherstellen<input type="file" accept="application/json,.json" data-a="restorefile" hidden></label></div>${backups&&backups.length?`<details${dk('bk')}><summary>Automatische Sicherungen (${backups.length})</summary>${backups.map(x=>`<div class="row" style="padding:4px 0"><span style="flex:1">${esc(new Date(x.created).toLocaleString('de-DE',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</span><button class="btn sm" data-a="restorebk" data-id="${x.id}">Wiederherstellen</button></div>`).join('')}</details>`:''}`;
+  return card('Familie',fam+b)+card('iPhone-Kalender',c)+card('Datensicherung',bk);
 }
 const VIEWS={heute:['Heute',vHeute,null],kalender:['Kalender',vKalender,'termine'],einkauf:['Einkauf',vEinkauf,'einkauf|essen'],ideen:['Ideen',vIdeen,'themen'],aufgaben:['Aufgaben',vAufgaben,'aufgaben'],mehr:['Einstellungen',vMehr,null]};
 const TABS=['heute','kalender','einkauf','ideen'];
@@ -429,7 +466,7 @@ function renderBar(){
 }
 function renderHead(){
   const t=t0();$('#hdate').textContent=fmtLong(t);
-  const h=new Date().getHours();$('#hello').textContent=(h<11?'Guten Morgen':h<18?'Hallo':'Guten Abend')+', '+meName;
+  const h=new Date().getHours();$('#hello').textContent=ME.role==='tablet'?(FAMILY||'Unsere Familie'):(h<11?'Guten Morgen':h<18?'Hallo':'Guten Abend')+', '+meName;$('#hdate').textContent=fmtLong(t)+(FAMILY&&ME.role!=='tablet'?' · '+FAMILY:'');
   const c=[];
   if(canSee('termine'))c.push(['kalender',eventsOn(t).length,'Termine heute',false]);
   if(canSee('aufgaben')){const n=dueTasks().length+S.filter(serieDue).length;c.push(['aufgaben',n,'zu erledigen',dueTasks().some(e=>e.faellig&&e.faellig<t)])}
@@ -439,9 +476,9 @@ function renderHead(){
   const bd={heute:unreadPins().length+proposals().length,ideen:inbox().length+dueTopics().length};
   document.querySelectorAll('[data-badge]').forEach(b=>{const n=bd[b.dataset.badge]||0;b.textContent=n;b.hidden=!n});
 }
-let renderTO=null;
+let renderTO=null,booting=false;
 function render(){
-  if(!ME)return;
+  if(!ME||booting)return;
   if(!allowedView(view))view='heute';
   renderHead();
   $('#fab').hidden=view==='mehr'||!AREAS.some(([k])=>canWrite(k));
@@ -495,14 +532,18 @@ function openItem(key){
   const [k,id]=[key.slice(0,1),key.slice(2)];
   if(k==='x'){const x=X.find(y=>y.id===id);if(!x)return;
     sheet(`<h2>${esc(x.titel)}<button class="x" data-close aria-label="Schließen">×</button></h2><p>${esc(relDay(x.start))}, ${esc(fmtLong(x.start.slice(0,10)))}${x.ganztags?' · ganztägig':' · '+esc(hm(x.start))+(hm(x.ende)?'–'+esc(hm(x.ende)):'')+' Uhr'}</p>${x.ort?`<p class="meta">${esc(x.ort)}</p>`:''}<p class="meta">Aus dem iPhone-Kalender „${esc(CAL||'')}“. Ändern bitte direkt im Kalender.</p>`);return}
+  if(k==='t'){closeSheet();openTopics.add(id);go('ideen');return}
   if(k==='s'){const s=S.find(y=>y.id===id);if(!s)return;const w=canWrite('aufgaben');
     sheet(`<h2>${esc(s.titel)}<button class="x" data-close aria-label="Schließen">×</button></h2><form id="ed" data-s="${esc(s.id)}"><label class="f">Titel<input name="titel" value="${esc(s.titel)}"${w?'':' disabled'}></label><div class="two"><label class="f">Wie oft<select name="rhythmus"${w?'':' disabled'}>${opts([['woechentlich','Jede Woche'],['monatlich','Jeden Monat'],['jaehrlich','Jedes Jahr']],s.rhythmus)}</select></label><label class="f">Nächstes Mal<input type="date" name="next" value="${esc(s.next||'')}"${w?'':' disabled'}></label></div>${w?'<div class="row"><button class="btn main" type="submit">Speichern</button><button class="btn warn" type="button" data-a="sdel">Löschen</button></div>':''}</form>`);return}
   const e=E.find(y=>y.id===id);if(!e)return;
   const area=KIND_AREA[e.kind]||'themen';const w=fullEdit(e,area);const dis=w?'':' disabled';
-  let f=`<label class="f">Titel<input name="titel" value="${esc(e.titel||'')}"${dis}></label>`;
+  const KINDS=[['termin','Termin'],['aufgabe','Aufgabe'],['einkauf','Einkauf'],['gedanke','Idee'],['nachricht','Pinnwand']].filter(([k])=>k===e.kind||canWrite(KIND_AREA[k]));
+  let f=w&&!e.vorschlag&&e.kind!=='eingang'?`<label class="f">Art<select name="kind" data-a="convert">${opts(KINDS,e.kind)}</select></label>`:'';
+  f+=`<label class="f">Titel<input name="titel" value="${esc(e.titel||'')}"${dis}></label>`;
   if(e.kind==='termin'){const d=String(e.start||'').slice(0,10),z=hm(e.start);
     f+=`<div class="two"><label class="f">Datum<input type="date" name="d" value="${esc(d)}"${dis}></label><label class="f">Uhrzeit (leer = ganztags)<input type="time" name="z" value="${esc(z)}"${dis}></label></div><label class="f">Erinnerung<select name="erinnerung"${dis}>${opts(REMIND,e.erinnerung===undefined||e.erinnerung===''?'60':e.erinnerung)}</select></label><div class="two"><label class="f">Für<select name="fuer"${dis}>${fuerOpts(fuerKey(e))}</select></label><label class="f">Sichtbar<select name="sicht"${dis}>${sichtOpts(e.sicht)}</select></label></div>`}
   if(e.kind==='aufgabe')f+=`<div class="two"><label class="f">Fällig am<input type="date" name="faellig" value="${esc(e.faellig||'')}"${dis}></label><label class="f">Uhrzeit (dann klingelt es)<input type="time" name="zeit" value="${esc(e.zeit||'')}"${dis}></label></div><div class="two"><label class="f">Für<select name="fuer"${dis}>${fuerOpts(fuerKey(e))}</select></label><label class="f">Sichtbar<select name="sicht"${dis}>${sichtOpts(e.sicht)}</select></label></div>`;
+  if(e.kind==='gedanke'){const names=[...new Set(T.map(t=>t.name).concat(e.thema?[e.thema]:[]))];f+=`<label class="f">Thema<input name="thema" list="themes" value="${esc(e.thema||'')}"${dis}><datalist id="themes">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist></label>`}
   if(e.kind==='einkauf')f+=`<div class="two"><label class="f">Menge<input name="menge" value="${esc(e.menge||'')}" placeholder="z. B. 2 Liter"${dis}></label><label class="f">Abteilung<select name="kat"${dis}>${opts(KAT_ORDER.map(x=>[x,x]),e.kat||katOf(e.titel))}</select></label></div>`;
   f+=`<label class="f">Notiz<input name="text" value="${esc(e.text&&e.text!==e.titel?e.text:'')}"${dis}></label>`;
   const meta=[e.by?'Notiert von '+who(e.by):'',e.kind==='termin'&&!e.vorschlag&&CAL&&e.sicht!=='privat'?(e.kalender&&!e.calErr?'steht im iPhone-Kalender':e.calErr?'Kalender-Fehler, wird erneut versucht':'wird in den Kalender eingetragen'):''].filter(Boolean).join(' · ');
@@ -520,8 +561,30 @@ $('#sheetRoot').addEventListener('submit',async ev=>{
     if(e.kind==='termin'){if(!isDate(fd.d)){toast('Bitte ein Datum wählen.');return}Object.assign(ch,{start:isTime(fd.z)?fd.d+'T'+fd.z:fd.d,ganztags:!isTime(fd.z),erinnerung:fd.erinnerung==='aus'?'aus':Number(fd.erinnerung),fuer:fd.fuer,sicht:fd.sicht});if(ch.start!==e.start)ch.ende=''}
     if(e.kind==='aufgabe')Object.assign(ch,{faellig:isDate(fd.faellig)?fd.faellig:'',zeit:isDate(fd.faellig)&&isTime(fd.zeit)?fd.zeit:'',fuer:fd.fuer,sicht:fd.sicht});
     if(e.kind==='einkauf')Object.assign(ch,{menge:String(fd.menge||'').trim().slice(0,40),kat:KAT_ORDER.includes(fd.kat)?fd.kat:''});
+    if(e.kind==='gedanke'){const name=String(fd.thema||'').trim().slice(0,60)||'Allgemein';ch.thema=await ensureTheme(name,e.sicht)}
     closeSheet();await upd('eintraege',e.id,ch);toast('Gespeichert.');
   }catch(err){toast(err.message||'Speichern hat nicht geklappt.')}
+});
+async function ensureTheme(name,sicht){
+  const ex=T.find(t=>t.name.toLowerCase()===name.toLowerCase());
+  if(ex){if(ex.done)await upd('themen',ex.id,{done:false,due:addDays(today(),7)});return ex.name}
+  await put('themen',slug(name)||uid(),{name,due:addDays(today(),7),done:false,at:new Date().toISOString(),by:meId,sicht:sicht||(isAdult()?'erwachsene':'familie')});return name;
+}
+async function convert(e,k){
+  if(e.kind===k)return;
+  const d=String(e.start||'').slice(0,10)||e.faellig||'';
+  const ch={kind:k};
+  if(k==='termin')Object.assign(ch,{start:d||addDays(today(),1),ganztags:true,done:false,vorschlag:!isAdult()||undefined,fuer:e.fuer||'wir'});
+  if(k==='aufgabe')Object.assign(ch,{faellig:d,zeit:hm(e.start)||'',done:false,fuer:e.fuer||'wir'});
+  if(k==='einkauf')Object.assign(ch,{done:false,kat:katOf(e.titel)});
+  if(k==='gedanke')Object.assign(ch,{thema:await ensureTheme(T[0]?T[0].name:'Allgemein'),sicht:isAdult()?'erwachsene':'familie'});
+  if(k==='nachricht')Object.assign(ch,{done:false,readBy:[meId],text:e.text||e.titel});
+  await upd('eintraege',e.id,ch);
+}
+$('#sheetRoot').addEventListener('change',async ev=>{
+  const el=ev.target;if(el.dataset.a!=='convert')return;
+  const e=E.find(y=>y.id===el.closest('form').dataset.e);if(!e)return;
+  try{await convert(e,el.value);toast('Umgewandelt in: '+el.options[el.selectedIndex].text+'. Bitte prüfen.');openItem('e:'+e.id)}catch(err){toast(err.message)}
 });
 $('#sheetRoot').addEventListener('click',async ev=>{
   const b=ev.target.closest('button[data-a]');if(!b)return;const fm=b.closest('form');
@@ -664,6 +727,10 @@ $('#p').addEventListener('click',async ev=>{
   const tEl=btn.closest('[data-t]'),eEl=btn.closest('[data-e]'),dEl=btn.closest('[data-d]'),uEl=btn.closest('[data-u]');
   try{
     if(a==='pushon')return enablePush();
+    if(a==='seen'){newSince=Date.now();LS.set('fa-seen-'+meId,newSince);render();return}
+    if(a==='mycolor'){await api('/api/prefs',{color:btn.dataset.c});USERS=(await api('/api/me')).users;render();return}
+    if(a==='ucolor'){btn.parentElement.querySelectorAll('.sw').forEach(x=>x.setAttribute('aria-pressed',String(x===btn)));return}
+    if(a==='restorebk'){if(btn.dataset.sure!=='1'){btn.dataset.sure='1';btn.textContent='Wirklich? Ersetzt alle Daten';return}const r=await api('/api/admin/restore',{backup:Number(btn.dataset.id)});toast(r.restored+' Einträge wiederhergestellt.');await pull(true);return}
     if(a==='pushtest'){const r=await api('/api/push/test',{});toast(r.results&&r.results.length?'Test gesendet. Die Mitteilung kommt gleich.':'Für dieses Gerät ist noch keine Mitteilung eingerichtet.');return}
     if(a==='pw')return showAuth('password');
     if(a==='logout'){await api('/api/logout',{});localStorage.removeItem('fa-cache');localStorage.removeItem('fa-me');location.href='/';return}
@@ -674,10 +741,11 @@ $('#p').addEventListener('click',async ev=>{
       else{try{await navigator.clipboard.writeText(box.dataset.link);toast('Link kopiert.')}catch(e){box.querySelector('input').select()}}
       return}
     if(a==='uadd'){const box=$('#newu');const name=box.querySelector('[data-k=name]').value.trim();if(!name){toast('Bitte einen Namen eingeben.');return}
-      const r=await api('/api/admin/users',{name,role:box.querySelector('[data-k=role]').value,perms:areasOf(box)});
-      adminUsers=null;await loadAdmin();USERS=(await api('/api/me')).users;const nb=$('#newu');if(nb){openD.add('newu');nb.closest('details').open=true;linkBox(nb.querySelector('[data-k=link]'),r.link,name)}return}
+      const profil=box.querySelector('[data-k=profil]').checked;
+      const r=await api('/api/admin/users',{name,role:box.querySelector('[data-k=role]').value,perms:areasOf(box),profil});
+      USERS=(await api('/api/me')).users;adminUsers=null;await loadAdmin();const nb=$('#newu');if(nb){openD.add('newu');nb.closest('details').open=true;if(r.link)linkBox(nb.querySelector('[data-k=link]'),r.link,name);else{nb.querySelector('[data-k=link]').innerHTML=`<p class="meta">${esc(name)} ist angelegt und kann jetzt Aufgaben bekommen.</p>`}}return}
     if(uEl){const id=uEl.dataset.u;const u=adminUsers.find(x=>x.id===id);
-      if(a==='usave'){await api('/api/admin/users/'+id,{role:uEl.querySelector('[data-k=role]').value,active:uEl.querySelector('[data-k=active]').checked,perms:areasOf(uEl)});adminUsers=null;await loadAdmin();toast('Gespeichert.');return}
+      if(a==='usave'){const sw=uEl.querySelector('.sw[aria-pressed=true]');await api('/api/admin/users/'+id,{role:uEl.querySelector('[data-k=role]').value,active:uEl.querySelector('[data-k=active]').checked,perms:areasOf(uEl),color:sw?sw.dataset.c:undefined});USERS=(await api('/api/me')).users;adminUsers=null;await loadAdmin();toast('Gespeichert.');return}
       if(a==='uinvite'){const r=await api('/api/admin/users/'+id+'/invite',{});linkBox(uEl.querySelector('[data-k=link]'),r.link,u.name);return}
       if(a==='udel'){if(btn.dataset.sure!=='1'){btn.dataset.sure='1';btn.textContent='Wirklich löschen?';return}await api('/api/admin/users/'+id,null,'DELETE');adminUsers=null;await loadAdmin();USERS=(await api('/api/me')).users;return}
       return}
@@ -707,7 +775,8 @@ $('#p').addEventListener('click',async ev=>{
 $('#p').addEventListener('change',async ev=>{
   const el=ev.target;const a=el.dataset.a;
   try{
-    if(el.dataset.k==='role'){const box=el.closest('[data-u],#newu');const pr=PRESETS[el.value]||PRESETS.erwachsener;box.querySelectorAll('select[data-area]').forEach(x=>{x.value=pr[x.dataset.area]});const pa=box.querySelector('[data-k=perms]');if(pa)pa.hidden=el.value==='admin';return}
+    if(el.dataset.k==='role'){const box=el.closest('[data-u],#newu');const pr=PRESETS[el.value]||PRESETS.erwachsener;box.querySelectorAll('select[data-area]').forEach(x=>{x.value=pr[x.dataset.area]});const pa=box.querySelector('[data-k=permwrap]');if(pa)pa.hidden=el.value==='admin';return}
+    if(a==='restorefile'&&el.files&&el.files[0]){let data;try{data=JSON.parse(await el.files[0].text())}catch(e){toast('Die Datei ist keine Sicherung der Family App.');return}if(!confirmRestore())return;const r=await api('/api/admin/restore',{data});toast(r.restored+' Einträge wiederhergestellt.');await pull(true);return}
     if(a==='tick'){const id=el.closest('[data-e]').dataset.e;const e=E.find(x=>x.id===id);if(!e)return;
       if(el.checked){await upd('eintraege',id,{done:true,doneAt:new Date().toISOString()});toast('Erledigt: '+e.titel,()=>upd('eintraege',id,{done:false}))}
       else await upd('eintraege',id,{done:false});return}
@@ -725,11 +794,14 @@ $('#p').addEventListener('input',ev=>{if(ev.target.id==='q'){q=ev.target.value.t
 $('#p').addEventListener('submit',async ev=>{
   ev.preventDefault();
   if(ev.target.id==='addBuy'){const i=$('#buyIn');const v=i.value.trim();if(!v)return;i.value='';const added=await addBuy(v);if(!added.length)toast('Steht schon auf der Liste.');render();return}
+  if(ev.target.id==='famname'){const n=new FormData(ev.target).get('name');try{await api('/api/admin/family',{name:n});FAMILY=String(n||'').trim();renderHead();toast('Gespeichert.')}catch(e){toast(e.message)}return}
+  if(ev.target.id==='credf'){const fd=Object.fromEntries(new FormData(ev.target));const b=ev.target.querySelector('[type=submit]');b.disabled=true;b.textContent='Prüfe bei Apple …';try{await api('/api/admin/calcred',fd);credInfo=await api('/api/admin/calcred');openD.delete('cred');toast('iCloud-Zugang gespeichert. Jetzt den Kalender wählen.');render()}catch(e){toast(e.message);b.disabled=false;b.textContent='Prüfen und speichern'}return}
   if(ev.target.id==='prefs'){const fd=Object.fromEntries(new FormData(ev.target));try{const r=await api('/api/prefs',fd);ME.prefs=r.prefs;toast('Zeiten gespeichert.')}catch(e){toast(e.message)}return}
 });
 
 /* ---------- Familie (Admin) ---------- */
-async function loadAdmin(){try{adminUsers=(await api('/api/admin/users')).users;render()}catch(e){toast(e.message)}}
+function confirmRestore(){return window.confirm?window.confirm('Alle aktuellen Einträge werden durch die Sicherung ersetzt. Vorher wird automatisch eine Kopie angelegt. Fortfahren?'):true}
+async function loadAdmin(){try{const [u,c,b]=await Promise.all([api('/api/admin/users'),api('/api/admin/calcred'),api('/api/admin/backups')]);adminUsers=u.users;credInfo=c;backups=b.backups;render()}catch(e){toast(e.message)}}
 function linkBox(el,link,name){
   const canShare=!!navigator.share;
   el.innerHTML=`<p class="meta">Diesen Link an ${esc(name)} schicken. Damit legt ${esc(name)} ein eigenes Passwort fest. Er gilt nur einmal.</p><input class="field" readonly value="${esc(link)}" aria-label="Einladungslink" style="font-size:13px;margin:6px 0"><div class="row">${canShare?'<button class="btn sm" data-a="share">Per Nachricht senden</button>':''}<button class="btn sm" data-a="copy">Kopieren</button></div>`;
@@ -772,7 +844,10 @@ function showAuth(mode,data){
   });
 }
 async function start(offline){
-  meId=ME.user.id;meName=ME.user.name;USERS=ME.users;CAL=ME.calendar;ME=ME.user;
+  const warnings=ME.warnings||[];FAMILY=ME.family||'';
+  meId=ME.user.id;meName=ME.user.name;USERS=ME.users;CAL=ME.calendar;ME=ME.user;ME.warnings=warnings;
+  newSince=LS.get('fa-seen-'+meId,0);if(!newSince){newSince=Date.now();LS.set('fa-seen-'+meId,newSince)}
+  booting=true;
   $('#auth').hidden=true;['#p','#top','#bar'].forEach(s=>$(s).hidden=false);$('#fab').hidden=!AREAS.some(([k])=>canWrite(k));
   try{const v=localStorage.getItem('fa-view');if(v&&TABS.includes(v))view=v}catch(e){}
   X=LS.get('fa-ext',[]);
@@ -784,13 +859,14 @@ async function start(offline){
   const cached=loadCache();
   if(cached)Object.keys(store).forEach(emit);
   await pull(!cached);
-  render();
+  booting=false;render();
   loadExternal();
-  setInterval(()=>{if(!document.hidden)pull()},15000);
+  setInterval(()=>{if(!document.hidden)pull()},60000);
   setInterval(()=>{if(!document.hidden)loadExternal()},10*60000);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){pull();render()}});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){pull();render()}else if(since){LS.set('fa-seen-'+meId,since)}});
+  if('serviceWorker'in navigator)navigator.serviceWorker.addEventListener('message',ev=>{if(ev.data==='pull')pull()});
   window.addEventListener('online',()=>pull());
-  if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.ready;const s=reg.pushManager&&await reg.pushManager.getSubscription();pushOn=!!s;if(s)api('/api/push/subscribe',{endpoint:s.endpoint}).catch(()=>{});render()}catch(e){}}
+  if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.ready;const s=reg.pushManager&&await reg.pushManager.getSubscription();pushOn=!!s;pushChecked=true;if(s)api('/api/push/subscribe',{endpoint:s.endpoint}).catch(()=>{});render()}catch(e){}}
 }
 async function boot(){
   if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});

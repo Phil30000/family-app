@@ -1,5 +1,6 @@
 // Family App – Cloudflare Worker (D1 + Workers AI + iCloud CalDAV + Web Push)
-// Bindings: DB (D1), AI (Workers AI). Secrets: SETUP_CODE, ICLOUD_USER, ICLOUD_PASS.
+// Bindings: DB (D1), AI (Workers AI). Secret: SETUP_CODE (auch Schlüssel für den in der App hinterlegten iCloud-Zugang).
+// Optional (alt): ICLOUD_USER, ICLOUD_PASS. Jede Familie läuft als eigene Kopie (eigener Worker + eigene D1).
 // Cron: "*/5 * * * *" – Morgen-Mitteilung (Zeit je Nutzer), Erinnerungen vor Terminen, iCloud-Abgleich.
 
 const APP_HTML = __APP_HTML__;
@@ -12,14 +13,16 @@ const AREAS = ['termine', 'aufgaben', 'einkauf', 'essen', 'themen', 'pinnwand'];
 const KIND_AREA = { termin: 'termine', aufgabe: 'aufgaben', einkauf: 'einkauf', gedanke: 'themen', eingang: 'themen', nachricht: 'pinnwand' };
 const COLL_AREA = { themen: 'themen', serien: 'aufgaben', essen: 'essen' };
 const COLLS = ['eintraege', 'themen', 'serien', 'essen'];
-const ROLES = ['admin', 'erwachsener', 'kind', 'gast'];
+const ROLES = ['admin', 'erwachsener', 'kind', 'gast', 'tablet'];
 const LEVELS = ['off', 'mine', 'view', 'edit'];
 const PRESETS = {
   admin: { termine: 'edit', aufgaben: 'edit', einkauf: 'edit', essen: 'edit', themen: 'edit', pinnwand: 'edit' },
   erwachsener: { termine: 'edit', aufgaben: 'edit', einkauf: 'edit', essen: 'edit', themen: 'edit', pinnwand: 'edit' },
   kind: { termine: 'mine', aufgaben: 'mine', einkauf: 'edit', essen: 'view', themen: 'off', pinnwand: 'edit' },
   gast: { termine: 'view', aufgaben: 'off', einkauf: 'off', essen: 'view', themen: 'off', pinnwand: 'view' },
+  tablet: { termine: 'view', aufgaben: 'edit', einkauf: 'edit', essen: 'view', themen: 'off', pinnwand: 'edit' },
 };
+const COLORS = ['#2f6db0', '#c8613a', '#7d5ab8', '#1f8a80', '#b4457f', '#a07a12', '#55697d', '#8a5a3a'];
 const AI_MODELS = [
   '@cf/mistralai/mistral-small-3.1-24b-instruct',
   '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
@@ -78,7 +81,18 @@ async function init(env) {
     `CREATE TABLE IF NOT EXISTS sent(k TEXT PRIMARY KEY,at INTEGER)`,
   ];
   await env.DB.batch(stmts.map((s) => env.DB.prepare(s)));
-  try { await env.DB.prepare('ALTER TABLE users ADD COLUMN prefs TEXT').run(); } catch (e) { /* gibt es schon */ }
+  for (const col of ['prefs TEXT', 'color TEXT', 'profil INTEGER NOT NULL DEFAULT 0']) {
+    try { await env.DB.prepare('ALTER TABLE users ADD COLUMN ' + col).run(); } catch (e) { /* gibt es schon */ }
+  }
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS backups(id INTEGER PRIMARY KEY AUTOINCREMENT,created INTEGER NOT NULL,data TEXT NOT NULL)').run();
+  const { results: cu } = await env.DB.prepare('SELECT id,color FROM users ORDER BY created,rowid').all();
+  const taken = new Set(cu.map((u) => u.color).filter(Boolean));
+  for (const u of cu) {
+    if (u.color) continue;
+    const c = COLORS.find((x) => !taken.has(x)) || COLORS[taken.size % COLORS.length];
+    taken.add(c);
+    await env.DB.prepare('UPDATE users SET color=? WHERE id=?').bind(c, u.id).run();
+  }
   ready = true;
 }
 async function getSetting(env, k) {
@@ -132,7 +146,7 @@ function normPrefs(raw) {
   for (const k of Object.keys(PREF_DEF)) if (p && HHMM.test(String(p[k] || ''))) o[k] = p[k];
   return o;
 }
-const pub = (u) => { const role = normRole(u.role); return { id: u.id, name: u.name, role, perms: normPerms(role, u.areas), prefs: normPrefs(u.prefs), active: !!u.active, invited: !!u.invite && !u.hash }; };
+const pub = (u) => { const role = normRole(u.role); return { id: u.id, name: u.name, role, perms: normPerms(role, u.areas), prefs: normPrefs(u.prefs), color: /^#[0-9a-f]{6}$/i.test(String(u.color || '')) ? u.color : '', profil: !!u.profil, active: !!u.active, invited: !u.profil && !!u.invite && !u.hash }; };
 const inQuiet = (prefs, hhmm) => { const a = prefs.ruheVon, b = prefs.ruheBis; if (a === b) return false; return a < b ? hhmm >= a && hhmm < b : hhmm >= a || hhmm < b; };
 const adult = (u) => u.role === 'admin' || u.role === 'erwachsener';
 const lvl = (u, a) => (u.perms && u.perms[a]) || 'off';
@@ -211,17 +225,51 @@ async function runAI(env, prompt) {
 }
 
 /* ---------------- iCloud-Kalender (CalDAV) ---------------- */
-function davAuth(env) {
-  const raw = env.ICLOUD_USER + ':' + env.ICLOUD_PASS;
-  const bytes = enc.encode(raw);
+const credCache = new WeakMap();
+async function credKey(env) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(String(env.SETUP_CODE || 'family-app')), 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: enc.encode('family-app-cal'), info: enc.encode('icloud') }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function setCred(env, user, pass) {
+  credCache.delete(env);
+  if (!user || !pass) { await env.DB.prepare('DELETE FROM settings WHERE k=?').bind('calcred').run(); return; }
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await credKey(env), enc.encode(JSON.stringify({ user, pass })));
+  await setSetting(env, 'calcred', { iv: b64u(iv), ct: b64u(ct), user });
+}
+async function getCred(env) {
+  const c = credCache.get(env);
+  if (c && Date.now() - c.at < 60000) return c.v;
+  let v = null;
+  const s = await getSetting(env, 'calcred');
+  if (s && s.iv) {
+    try {
+      const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: ub64u(s.iv) }, await credKey(env), ub64u(s.ct));
+      const o = JSON.parse(new TextDecoder().decode(pt));
+      if (o.user && o.pass) v = { user: o.user, pass: o.pass };
+    } catch (e) { /* Schlüssel passt nicht mehr */ }
+  }
+  if (!v && env.ICLOUD_USER && env.ICLOUD_PASS) v = { user: env.ICLOUD_USER, pass: env.ICLOUD_PASS, fromEnv: true };
+  credCache.set(env, { v, at: Date.now() });
+  return v;
+}
+function basic(c) {
+  const bytes = enc.encode(c.user + ':' + c.pass);
   let s = '';
   bytes.forEach((b) => (s += String.fromCharCode(b)));
   return 'Basic ' + btoa(s);
 }
+async function calStatus(env, err) {
+  const st = (await getSetting(env, 'calstatus')) || { fails: 0 };
+  const v = err ? { ok: false, err: String(err).slice(0, 200), fails: (st.fails || 0) + 1, at: Date.now() } : { ok: true, fails: 0, at: Date.now() };
+  if (st.ok !== v.ok || st.fails !== v.fails || st.err !== v.err) await setSetting(env, 'calstatus', v);
+}
 async function dav(env, url, method, body, headers = {}) {
+  const c = await getCred(env);
+  if (!c) throw new Error('Der iCloud-Zugang fehlt. Ein Admin trägt ihn unter Einstellungen › iPhone-Kalender ein.');
   let u = url;
   for (let i = 0; i < 6; i++) {
-    const r = await fetch(u, { method, redirect: 'manual', headers: { authorization: davAuth(env), ...(body ? { 'content-type': 'application/xml; charset=utf-8' } : {}), ...headers }, body });
+    const r = await fetch(u, { method, redirect: 'manual', headers: { authorization: basic(c), ...(body ? { 'content-type': 'application/xml; charset=utf-8' } : {}), ...headers }, body });
     const loc = r.headers.get('location');
     if ([301, 302, 303, 307, 308].includes(r.status) && loc) { u = new URL(loc, u).href; continue; }
     return { r, url: u, text: await r.text() };
@@ -235,7 +283,6 @@ const xmlHrefIn = (x, tag) => {
 };
 const xmlUnesc = (s) => String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
 async function listCalendars(env) {
-  if (!env.ICLOUD_USER || !env.ICLOUD_PASS) throw new Error('iCloud-Zugang fehlt (ICLOUD_USER / ICLOUD_PASS).');
   const a = await dav(env, 'https://caldav.icloud.com/', 'PROPFIND', '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>', { depth: '0' });
   if (a.r.status === 401) throw new Error('iCloud lehnt die Anmeldung ab. Apple-ID und app-spezifisches Passwort prüfen.');
   const ph = xmlHrefIn(a.text, 'current-user-principal');
@@ -306,7 +353,7 @@ async function userName(env, id) {
 }
 async function calPut(env, id) {
   const cal = await getSetting(env, 'cal');
-  if (!cal || !env.ICLOUD_USER || !env.ICLOUD_PASS) return false;
+  if (!cal || !(await getCred(env))) return false;
   const d = await getDoc(env, 'eintraege', id);
   if (!d || d.deleted || !d.data || d.data.kind !== 'termin' || !/^\d{4}-\d\d-\d\d/.test(String(d.data.start || ''))) return false;
   if (d.data.vorschlag || d.data.sicht === 'privat') {
@@ -327,7 +374,7 @@ async function calPut(env, id) {
   return true;
 }
 async function calDelete(env, data) {
-  if (!data || !data.calUrl || !env.ICLOUD_USER || !env.ICLOUD_PASS) return;
+  if (!data || !data.calUrl || !(await getCred(env))) return;
   try { await dav(env, data.calUrl, 'DELETE', null); } catch (e) { /* egal */ }
 }
 const sigOf = (d) => [d.titel, d.text, d.start, d.ende, d.ganztags].join('|');
@@ -341,9 +388,11 @@ async function syncPending(env, limit = 10) {
   const yesterday = addDaysIso(berlin().date, -1);
   const docs = (await allDocs(env, 'eintraege')).filter((x) => x.data.kind === 'termin' && !x.data.vorschlag && x.data.sicht !== 'privat' && String(x.data.start || '').slice(0, 10) >= yesterday && (!x.data.kalender || x.data.calSig !== sigOf(x.data)));
   let synced = 0, failed = 0;
+  let lastErr = '';
   for (const x of docs.slice(0, limit)) {
-    try { if (await calPut(env, x.id)) synced++; } catch (e) { failed++; await calMark(env, x.id, e.message); }
+    try { if (await calPut(env, x.id)) synced++; } catch (e) { failed++; lastErr = e.message; await calMark(env, x.id, e.message); }
   }
+  if (docs.length) await calStatus(env, failed && !synced ? lastErr : '');
   return { synced, failed, open: Math.max(0, docs.length - synced) };
 }
 
@@ -384,12 +433,16 @@ function parseEvents(xml) {
 }
 async function refreshExternal(env) {
   const cal = await getSetting(env, 'cal');
-  if (!cal || !env.ICLOUD_USER || !env.ICLOUD_PASS) return null;
+  if (!cal || !(await getCred(env))) return null;
   const t0 = berlin().date;
   const from = addDaysIso(t0, -1).replace(/-/g, '') + 'T000000Z', to = addDaysIso(t0, 60).replace(/-/g, '') + 'T000000Z';
   const body = `<?xml version="1.0" encoding="utf-8"?><c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-data><c:expand start="${from}" end="${to}"/></c:calendar-data></d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range start="${from}" end="${to}"/></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>`;
-  const res = await dav(env, cal.url, 'REPORT', body, { depth: '1' });
-  if (res.r.status !== 207) throw new Error('Kalender lesen: ' + res.r.status);
+  let res;
+  try {
+    res = await dav(env, cal.url, 'REPORT', body, { depth: '1' });
+    if (res.r.status !== 207) throw new Error(res.r.status === 401 ? 'iCloud lehnt die Anmeldung ab. App-spezifisches Passwort prüfen.' : 'Kalender lesen: ' + res.r.status);
+  } catch (e) { await calStatus(env, e.message); throw e; }
+  await calStatus(env, '');
   const v = { at: Date.now(), events: parseEvents(res.text) };
   await setSetting(env, 'calext', v);
   return v;
@@ -561,7 +614,7 @@ async function handleApi(req, env, ctx, url) {
     const name = cleanName(body.name);
     if (!name || String(body.password || '').length < 8) return bad('Name und ein Passwort mit mindestens 8 Zeichen angeben.');
     const id = 'u_' + rid(9), salt = rid(16);
-    await env.DB.prepare('INSERT INTO users(id,name,role,areas,salt,hash,active,created) VALUES(?,?,?,?,?,?,1,?)').bind(id, name, 'admin', JSON.stringify(PRESETS.admin), salt, await pwHash(body.password, salt), nowIso()).run();
+    await env.DB.prepare('INSERT INTO users(id,name,role,areas,salt,hash,active,created,color) VALUES(?,?,?,?,?,?,1,?,?)').bind(id, name, 'admin', JSON.stringify(PRESETS.admin), salt, await pwHash(body.password, salt), nowIso(), COLORS[0]).run();
     for (const d of SEED.docs || []) {
       const data = { ...d.data };
       for (const k of Object.keys(data)) if (data[k] === SEED.owner) data[k] = id;
@@ -605,9 +658,17 @@ async function handleApi(req, env, ctx, url) {
 
   if (p === '/api/me') {
     const cal = await getSetting(env, 'cal');
-    return json({ user: me, users: users.filter((u) => u.active).map((u) => ({ id: u.id, name: u.name, role: u.role })), calendar: cal ? cal.name : null, ai: !!env.AI });
+    const warn = [];
+    if (me.role === 'admin') {
+      const st = await getSetting(env, 'calstatus');
+      if (cal && st && !st.ok && st.fails >= 3) warn.push('iPhone-Kalender: Abgleich klappt seit ' + st.fails + ' Versuchen nicht (' + st.err + ').');
+      if (cal && !(await getCred(env))) warn.push('iPhone-Kalender: Der iCloud-Zugang fehlt.');
+    }
+    const fam = (await getSetting(env, 'family')) || {};
+    return json({ user: me, users: users.filter((u) => u.active).map((u, i) => ({ id: u.id, name: u.name, role: u.role, profil: u.profil, color: u.color || COLORS[i % COLORS.length] })), calendar: cal ? cal.name : null, ai: !!env.AI, family: fam.name || '', warnings: warn });
   }
   if (p === '/api/prefs' && req.method === 'POST') {
+    if (/^#[0-9a-f]{6}$/i.test(String(body.color || ''))) await env.DB.prepare('UPDATE users SET color=? WHERE id=?').bind(body.color, me.id).run();
     const np = { ...me.prefs };
     for (const k of Object.keys(PREF_DEF)) if (HHMM.test(String(body[k] || ''))) np[k] = body[k];
     await env.DB.prepare('UPDATE users SET prefs=? WHERE id=?').bind(JSON.stringify(np), me.id).run();
@@ -647,7 +708,7 @@ async function handleApi(req, env, ctx, url) {
       const data = r.data ? JSON.parse(r.data) : null;
       if (!canRead(me, r.coll, data)) { if (since) docs.push({ coll: r.coll, id: r.id, deleted: 1 }); continue; }
       if (r.deleted) { if (since) docs.push({ coll: r.coll, id: r.id, deleted: 1 }); continue; }
-      docs.push({ coll: r.coll, id: r.id, data });
+      docs.push({ coll: r.coll, id: r.id, data, u: r.updated });
     }
     return json({ now: max, docs });
   }
@@ -723,8 +784,11 @@ async function handleApi(req, env, ctx, url) {
     if (users.some((u) => u.name.toLowerCase() === name.toLowerCase())) return bad('Diesen Namen gibt es schon.');
     const role = ROLES.includes(body.role) ? body.role : 'erwachsener';
     const id = 'u_' + rid(9), t = rid(24);
-    await env.DB.prepare('INSERT INTO users(id,name,role,areas,invite,active,created) VALUES(?,?,?,?,?,1,?)').bind(id, name, role, JSON.stringify(cleanPerms(role, body.perms)), await sha(t), nowIso()).run();
-    return json({ ok: true, link: url.origin + '/?einladung=' + t });
+    const profil = !!body.profil && role !== 'admin';
+    const used = new Set(users.map((u) => u.color));
+    const color = /^#[0-9a-f]{6}$/i.test(String(body.color || '')) ? body.color : COLORS.find((c) => !used.has(c)) || COLORS[users.length % COLORS.length];
+    await env.DB.prepare('INSERT INTO users(id,name,role,areas,invite,active,created,color,profil) VALUES(?,?,?,?,?,1,?,?,?)').bind(id, name, role, JSON.stringify(cleanPerms(role, body.perms)), profil ? null : await sha(t), nowIso(), color, profil ? 1 : 0).run();
+    return json({ ok: true, id, link: profil ? '' : url.origin + '/?einladung=' + t });
   }
   const um = p.match(/^\/api\/admin\/users\/(u_[\w-]+)(\/invite)?$/);
   if (um) {
@@ -733,7 +797,7 @@ async function handleApi(req, env, ctx, url) {
     const admins = users.filter((u) => u.role === 'admin' && u.active);
     if (um[2] && req.method === 'POST') {
       const t = rid(24);
-      await env.DB.prepare('UPDATE users SET invite=?,hash=NULL,salt=NULL WHERE id=?').bind(await sha(t), target.id).run();
+      await env.DB.prepare('UPDATE users SET invite=?,hash=NULL,salt=NULL,profil=0 WHERE id=?').bind(await sha(t), target.id).run();
       await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(target.id).run();
       return json({ ok: true, link: url.origin + '/?einladung=' + t });
     }
@@ -742,6 +806,8 @@ async function handleApi(req, env, ctx, url) {
       const active = body.active === undefined ? target.active : !!body.active;
       if (target.role === 'admin' && (role !== 'admin' || !active) && admins.length <= 1) return bad('Mindestens ein Admin muss bleiben.');
       await env.DB.prepare('UPDATE users SET role=?,areas=?,active=? WHERE id=?').bind(role, JSON.stringify(cleanPerms(role, body.perms || (role === target.role ? target.perms : null))), active ? 1 : 0, target.id).run();
+      if (/^#[0-9a-f]{6}$/i.test(String(body.color || ''))) await env.DB.prepare('UPDATE users SET color=? WHERE id=?').bind(body.color, target.id).run();
+      if (typeof body.name === 'string' && cleanName(body.name)) await env.DB.prepare('UPDATE users SET name=? WHERE id=?').bind(cleanName(body.name), target.id).run();
       if (!active) await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(target.id).run();
       return json({ ok: true });
     }
@@ -762,10 +828,74 @@ async function handleApi(req, env, ctx, url) {
     ctx.waitUntil(syncPending(env));
     return json({ ok: true });
   }
+  if (p === '/api/admin/calcred') {
+    if (req.method === 'POST') {
+      const user = String(body.user || '').trim().slice(0, 200), pass = String(body.pass || '').replace(/\s+/g, '').slice(0, 100);
+      if (body.clear) { await setCred(env, '', ''); return json({ ok: true }); }
+      if (!/^[^@\s]+@[^@\s]+$/.test(user) || pass.length < 8) return bad('Bitte Apple-ID (E-Mail) und das app-spezifische Passwort eingeben.');
+      const prev = await getSetting(env, 'calcred');
+      await setCred(env, user, pass);
+      try { await listCalendars(env); } catch (e) {
+        if (prev) await setSetting(env, 'calcred', prev); else await setCred(env, '', '');
+        credCache.delete(env);
+        return bad(e.message, 502);
+      }
+      await calStatus(env, '');
+      return json({ ok: true });
+    }
+    const c = await getCred(env);
+    return json({ configured: !!c, user: c ? c.user.replace(/^(.{2}).*(@.*)$/, '$1…$2') : '', fromEnv: !!(c && c.fromEnv) });
+  }
+  if (p === '/api/admin/family' && req.method === 'POST') {
+    await setSetting(env, 'family', { name: cleanName(body.name) });
+    return json({ ok: true });
+  }
+  if (p === '/api/admin/export') {
+    return new Response(JSON.stringify(await exportAll(env), null, 1), { headers: { 'content-type': 'application/json; charset=utf-8', 'content-disposition': 'attachment; filename="family-app-sicherung-' + berlin().date + '.json"', 'cache-control': 'no-store' } });
+  }
+  if (p === '/api/admin/backups') {
+    const { results } = await env.DB.prepare('SELECT id,created,length(data) AS size FROM backups ORDER BY id DESC').all();
+    return json({ backups: results });
+  }
+  if (p === '/api/admin/restore' && req.method === 'POST') {
+    let data = body.data;
+    if (body.backup) { const r = await env.DB.prepare('SELECT data FROM backups WHERE id=?').bind(Number(body.backup)).first(); data = r ? JSON.parse(r.data) : null; }
+    if (!data || data.app !== 'family-app' || !Array.isArray(data.docs)) return bad('Das ist keine gültige Sicherung.');
+    await env.DB.prepare('INSERT INTO backups(created,data) VALUES(?,?)').bind(Date.now(), JSON.stringify(await exportAll(env))).run();
+    const now = stamp();
+    await env.DB.prepare('UPDATE docs SET deleted=1,updated=? WHERE deleted=0').bind(now).run();
+    const ops = data.docs.filter((d) => COLLS.includes(d.coll) && d.id && d.data).map((d) => env.DB.prepare('INSERT INTO docs(coll,id,data,updated,deleted) VALUES(?,?,?,?,0) ON CONFLICT(coll,id) DO UPDATE SET data=excluded.data,updated=excluded.updated,deleted=0').bind(d.coll, String(d.id), JSON.stringify(d.data), stamp()));
+    for (let i = 0; i < ops.length; i += 50) await env.DB.batch(ops.slice(i, i + 50));
+    return json({ ok: true, restored: ops.length });
+  }
   if (p === '/api/admin/calsync' && req.method === 'POST') {
     try { const r = await syncPending(env); const c = await refreshExternal(env); return json({ ...r, external: c ? c.events.length : 0 }); } catch (e) { return bad(e.message, 502); }
   }
   return bad('Nicht gefunden.', 404);
+}
+
+async function exportAll(env) {
+  const { results } = await env.DB.prepare('SELECT coll,id,data FROM docs WHERE deleted=0').all();
+  const us = (await env.DB.prepare('SELECT id,name,role,color,profil FROM users').all()).results;
+  const fam = await getSetting(env, 'family');
+  return { app: 'family-app', version: 1, created: new Date().toISOString(), family: fam ? fam.name : '', users: us, docs: results.map((r) => ({ coll: r.coll, id: r.id, data: JSON.parse(r.data) })) };
+}
+async function housekeeping(env) {
+  const now = Date.now(), day = 86400000;
+  // erledigte Aufgaben nach 60 Tagen, gelöschte Einträge nach 30 Tagen endgültig entfernen
+  const E = await allDocs(env, 'eintraege');
+  const old = E.filter((x) => (x.data.kind === 'aufgabe' && x.data.done && Date.parse(x.data.doneAt || 0) < now - 60 * day) || (x.data.kind === 'termin' && String(x.data.start || '9') < addDaysIso(berlin().date, -180)));
+  // Einkauf: gekaufte Artikel als "Zuletzt gekauft" behalten (je Titel der neueste, höchstens 80)
+  const bought = E.filter((x) => x.data.kind === 'einkauf' && x.data.done).sort((a, b) => String(b.data.doneAt || b.data.at || '').localeCompare(String(a.data.doneAt || a.data.at || '')));
+  const seen = new Set(); let keep = 0;
+  for (const x of bought) { const k = String(x.data.titel || '').toLowerCase(); if (seen.has(k) || keep >= 80) old.push(x); else { seen.add(k); keep++; } }
+  for (const x of old) await deleteDoc(env, 'eintraege', x.id);
+  await env.DB.prepare('DELETE FROM docs WHERE deleted=1 AND updated<?').bind(now - 30 * day).run();
+  return old.length;
+}
+async function weeklyBackup(env) {
+  await env.DB.prepare('INSERT INTO backups(created,data) VALUES(?,?)').bind(Date.now(), JSON.stringify(await exportAll(env))).run();
+  await env.DB.prepare('DELETE FROM backups WHERE id NOT IN (SELECT id FROM backups ORDER BY id DESC LIMIT 6)').run();
 }
 
 async function tick(env, ms) {
@@ -786,9 +916,13 @@ async function tick(env, ms) {
     await env.DB.prepare('DELETE FROM sent WHERE at<?').bind(Date.now() - 40 * 86400000).run();
     await env.DB.prepare('DELETE FROM notes WHERE created<?').bind(Date.now() - 3 * 86400000).run();
   }
+  if (b.hh === '03' && Number(b.mm) < 5) {
+    try { out.archived = await housekeeping(env); } catch (e) { out.err = e.message; }
+    if (b.weekday === 'Sun') { try { await weeklyBackup(env); } catch (e) { out.err = e.message; } }
+  }
   return out;
 }
-export const _test = { tick, parseEvents, inQuiet, normPrefs };
+export const _test = { tick, parseEvents, inQuiet, normPrefs, housekeeping, weeklyBackup, getCred };
 
 const MANIFEST = JSON.stringify({
   name: 'Family App', short_name: 'Family', start_url: '/', scope: '/', display: 'standalone', background_color: '#eef3f8', theme_color: '#2f5d84', lang: 'de',

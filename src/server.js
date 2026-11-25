@@ -79,6 +79,7 @@ async function init(env) {
     `CREATE TABLE IF NOT EXISTS notes(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL,title TEXT,body TEXT,created INTEGER NOT NULL,seen INTEGER NOT NULL DEFAULT 0)`,
     `CREATE INDEX IF NOT EXISTS notes_user ON notes(user_id,seen)`,
     `CREATE TABLE IF NOT EXISTS sent(k TEXT PRIMARY KEY,at INTEGER)`,
+    `CREATE TABLE IF NOT EXISTS tokens(hash TEXT PRIMARY KEY,user_id TEXT NOT NULL,created TEXT)`,
   ];
   await env.DB.batch(stmts.map((s) => env.DB.prepare(s)));
   for (const col of ['prefs TEXT', 'color TEXT', 'profil INTEGER NOT NULL DEFAULT 0']) {
@@ -340,11 +341,39 @@ function buildIcs(uid, e, byName) {
     const en = e.ende && String(e.ende).length > 10 && String(e.ende) > s ? String(e.ende) : hourLater(s);
     lines.push('DTSTART;TZID=Europe/Berlin:' + dt(s), 'DTEND;TZID=Europe/Berlin:' + dt(en));
   }
+  const freq = { woechentlich: 'FREQ=WEEKLY', zweiwoechentlich: 'FREQ=WEEKLY;INTERVAL=2', monatlich: 'FREQ=MONTHLY', jaehrlich: 'FREQ=YEARLY' }[e.wdh];
+  if (freq) lines.push('RRULE:' + freq + (/^\d{4}-\d\d-\d\d$/.test(String(e.wdhBis || '')) ? ';UNTIL=' + String(e.wdhBis).replace(/-/g, '') + (allDay ? '' : 'T235959Z') : ''));
+  if (freq) for (const x of (e.ausnahmen || []).filter(isDay).slice(0, 100)) lines.push(allDay ? 'EXDATE;VALUE=DATE:' + x.replace(/-/g, '') : 'EXDATE;TZID=Europe/Berlin:' + dt(x + s.slice(10)));
   lines.push('SUMMARY:' + icsEsc(e.titel || 'Termin'));
   const desc = [e.text && e.text !== e.titel ? e.text : '', byName ? 'Eingetragen von ' + byName + ' über die Family App' : 'Eingetragen über die Family App'].filter(Boolean).join('\n');
   lines.push('DESCRIPTION:' + icsEsc(desc));
   lines.push('END:VEVENT', 'END:VCALENDAR');
   return lines.map(fold).join('\r\n') + '\r\n';
+}
+const isDay = (x) => /^\d{4}-\d\d-\d\d$/.test(String(x || ''));
+const WDH = ['woechentlich', 'zweiwoechentlich', 'monatlich', 'jaehrlich'];
+function addMonthsIso(d, n) {
+  const [y, m, day] = d.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1 + n, 1));
+  const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  t.setUTCDate(Math.min(day, last));
+  return t.toISOString().slice(0, 10);
+}
+// Alle Termine eines Tages (Serientermine aufgelöst)
+function onDay(e, day) {
+  const s = String(e.start || ''), d0 = s.slice(0, 10);
+  if (!d0 || day < d0) return null;
+  const time = s.length > 10 ? s.slice(10) : '';
+  if (!WDH.includes(e.wdh)) return d0 === day ? s : null;
+  if (e.wdhBis && day > e.wdhBis) return null;
+  if ((e.ausnahmen || []).includes(day)) return null;
+  const diff = Math.round((Date.parse(day) - Date.parse(d0)) / 864e5);
+  if (e.wdh === 'woechentlich' && diff % 7 === 0) return day + time;
+  if (e.wdh === 'zweiwoechentlich' && diff % 14 === 0) return day + time;
+  if (e.wdh === 'monatlich' || e.wdh === 'jaehrlich') {
+    for (let i = 0, x = d0; x <= day && i < 1200; i++, x = addMonthsIso(d0, i * (e.wdh === 'monatlich' ? 1 : 12))) if (x === day) return day + time;
+  }
+  return null;
 }
 async function userName(env, id) {
   if (!id) return '';
@@ -377,7 +406,7 @@ async function calDelete(env, data) {
   if (!data || !data.calUrl || !(await getCred(env))) return;
   try { await dav(env, data.calUrl, 'DELETE', null); } catch (e) { /* egal */ }
 }
-const sigOf = (d) => [d.titel, d.text, d.start, d.ende, d.ganztags].join('|');
+const sigOf = (d) => [d.titel, d.text, d.start, d.ende, d.ganztags, d.wdh || '', d.wdhBis || '', (d.ausnahmen || []).join(',')].join('|');
 async function calMark(env, id, err) {
   const d = await getDoc(env, 'eintraege', id);
   if (d && !d.deleted && d.data) await putDoc(env, 'eintraege', id, { ...d.data, calErr: String(err).slice(0, 200) });
@@ -517,8 +546,18 @@ async function reminders(env, from, to) {
     let at = null, title = '', body = '';
     if (e.kind === 'termin' && !e.vorschlag && String(e.start || '').length > 10 && e.erinnerung !== 'aus') {
       const lead = Number.isFinite(+e.erinnerung) && e.erinnerung !== '' && e.erinnerung !== undefined ? +e.erinnerung : 60;
-      at = minusMin(e.start, lead);
-      title = 'Termin um ' + e.start.slice(11, 16) + ' Uhr';
+      // Der Termin, dessen Erinnerung in dieses Fenster fällt (bei Serien: das passende Vorkommen)
+      let occ = e.start;
+      if (WDH.includes(e.wdh)) {
+        occ = null;
+        for (let k = 0; k <= Math.ceil(lead / 1440) + 1 && !occ; k++) {
+          const day = addDaysIso(to.slice(0, 10), k), o = onDay(e, day);
+          if (o) { const a = minusMin(o, lead); if (a > from && a <= to) occ = o; }
+        }
+        if (!occ) continue;
+      }
+      at = minusMin(occ, lead);
+      title = 'Termin um ' + occ.slice(11, 16) + ' Uhr';
       body = e.titel + (lead >= 1440 ? ' (morgen)' : '');
     } else if (e.kind === 'aufgabe' && !e.done && e.faellig && HHMM.test(String(e.zeit || ''))) {
       at = e.faellig + 'T' + e.zeit;
@@ -567,7 +606,7 @@ async function briefing(env, u) {
   const E = (await allDocs(env, 'eintraege')).map((x) => x.data).filter((d) => canRead(u, 'eintraege', d) && !d.vorschlag);
   const lines = [];
   if (can(u, 'termine')) {
-    let ter = E.filter((e) => e.kind === 'termin' && String(e.start || '').slice(0, 10) === t0);
+    let ter = E.filter((e) => e.kind === 'termin' && onDay(e, t0)).map((e) => ({ ...e, start: onDay(e, t0) }));
     if (seesExternal(u)) { const c = await getSetting(env, 'calext'); if (c) ter = ter.concat(c.events.filter((x) => x.start.slice(0, 10) === t0)); }
     ter.sort((a, b) => String(a.start).localeCompare(String(b.start)));
     if (ter.length) lines.push('Termine: ' + ter.map((e) => (String(e.start).length > 10 ? String(e.start).slice(11, 16) + ' ' : '') + e.titel).join(', '));
@@ -599,6 +638,206 @@ async function briefing(env, u) {
   }
   if (extra.length) lines.push(extra.join(' · '));
   return lines.length ? lines.join('\n') : 'Heute steht nichts Besonderes an.';
+}
+
+async function applyOps(env, ctx, me, ops) {
+  const calTouch = new Set(), calGone = [], events = [];
+  for (const o of ops) {
+    if (!COLLS.includes(o.coll) || !/^[\w-]{1,80}$/.test(String(o.id || ''))) return { error: 'Ungültiger Eintrag.' };
+    const cur = await getDoc(env, o.coll, o.id);
+    const old = cur && !cur.deleted ? cur.data : null;
+    if (old && !canWrite(me, o.coll, null, old)) return { error: 'Dafür fehlt dir die Berechtigung.', status: 403 };
+    if (o.op === 'delete') {
+      if (old && old.by !== me.id && lvl(me, docArea(o.coll, old)) === 'mine') return { error: 'Dafür fehlt dir die Berechtigung.', status: 403 };
+      if (!old) continue;
+      await deleteDoc(env, o.coll, o.id);
+      if (o.coll === 'eintraege' && old.kind === 'termin') calGone.push(old);
+      continue;
+    }
+    if (!o.data || typeof o.data !== 'object' || JSON.stringify(o.data).length > 20000) return { error: 'Ungültige Daten.' };
+    let data;
+    if (o.op === 'set') data = { ...o.data };
+    else if (o.op === 'update') { if (!old) return { error: 'Eintrag existiert nicht.', status: 404 }; data = { ...old, ...o.data }; }
+    else return { error: 'Unbekannte Aktion.' };
+    for (const k of ['kalender', 'calUid', 'calUrl', 'calSig', 'calErr']) { if (old && k in old) data[k] = old[k]; else if (!old) delete data[k]; }
+    if (!old) data.by = me.id;
+    else data.by = old.by || data.by;
+    if (!['familie', 'erwachsene', 'privat'].includes(data.sicht || 'familie')) data.sicht = 'familie';
+    if (o.coll === 'eintraege' && data.kind === 'termin' && !adult(me) && (!old || old.vorschlag || old.kind !== 'termin')) data.vorschlag = true;
+    if (!canWrite(me, o.coll, data, old)) return { error: 'Dafür fehlt dir die Berechtigung.', status: 403 };
+    await putDoc(env, o.coll, o.id, data);
+    if (o.coll === 'eintraege') {
+      if (data.kind === 'nachricht' && !old) events.push({ type: 'pin', data });
+      if (data.kind === 'termin' && data.vorschlag && (!old || !old.vorschlag)) events.push({ type: 'vorschlag', data });
+      if (data.kind === 'aufgabe' && !data.done && data.fuer && data.fuer !== 'wir' && data.fuer !== me.id && (!old || old.fuer !== data.fuer)) events.push({ type: 'zuweisung', data });
+    }
+    if (o.coll === 'eintraege' && (data.kind === 'termin' || (old && old.kind === 'termin'))) {
+      if (data.kind === 'termin') calTouch.add(o.id); else if (old) calGone.push(old);
+    }
+  }
+  if (events.length) ctx.waitUntil(onWrite(env, me, events).catch(() => {}));
+  if (calTouch.size || calGone.length) {
+    ctx.waitUntil((async () => {
+      for (const g of calGone) await calDelete(env, g);
+      for (const id of calTouch) { try { await calPut(env, id); } catch (e) { await calMark(env, id, e.message); } }
+    })());
+  }
+return { ok: true };
+}
+
+
+/* ---------------- Erfassen (Text oder Sprache -> Einträge) ---------------- */
+const WDN = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+const isD = (x) => /^\d{4}-\d\d-\d\d$/.test(String(x || ''));
+const isT = (x) => HHMM.test(String(x || ''));
+const slugify = (x) => 't-' + String(x).toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+const relDe = (d, today) => (d === today ? 'heute' : d === addDaysIso(today, 1) ? 'morgen' : d.split('-').reverse().slice(0, 2).join('.') + '.');
+function capturePrompt(me, users, themes, text) {
+  const b = berlin();
+  const wd = WDN[new Date(b.date + 'T12:00:00Z').getUTCDay()];
+  return `Du sortierst Einträge einer Familie in einer gemeinsamen App. Heute ist ${wd}, ${b.date}, ${b.hh}:${b.mm} Uhr.
+Familienmitglieder: ${users.map((u) => u.name).join(', ')}.
+Eingabe von ${me.name}: """${text}"""
+
+Bestehende Themen (Namen exakt übernehmen, wenn eines passt):
+${themes.length ? themes.map((n) => '- ' + n).join('\n') : '(noch keine)'}
+
+Zerlege die Eingabe in einzelne Einträge. art ist eines von:
+- "termin": fester Zeitpunkt mit Datum (Arzt, Treffen, Feier).
+- "aufgabe": etwas Konkretes, das jemand erledigen muss (TÜV machen, Rechnung zahlen, Handwerker anrufen).
+- "gedanke": Idee oder Überlegung ohne konkreten Auftrag (Urlaubsidee, Garten umgestalten, Geschenkidee).
+- "einkauf": etwas kaufen oder besorgen, je Artikel ein Eintrag.
+- "serie": etwas Wiederkehrendes (jeden Dienstag 17:30 Training, jeden Dienstag Restmüll, Geburtstag am 3. Februar).
+- "essen": Gericht für einen bestimmten Tag (Freitag gibt es Lasagne).
+- "nachricht": kurze Info an die anderen, die sie lesen sollen (Paket liegt beim Nachbarn, bin heute später zu Hause).
+
+Felder je Eintrag (nicht passende leer lassen):
+- titel: kurz, höchstens 6 Wörter, auf Deutsch. Bei einkauf nur der Artikel ohne Menge.
+- text: der Inhalt als ein klarer Satz.
+- menge: nur bei einkauf, wenn eine Menge genannt ist (2 Liter, 500 g).
+- zustaendig: bei aufgabe, termin und serie. Für wen es ist: der Vorname eines Familienmitglieds, "ich" für ${me.name} oder "wir". Ohne Hinweis "wir".
+- faellig: bei aufgabe ein Datum YYYY-MM-DD, wenn eines genannt ist, sonst leer.
+- zeit: bei aufgabe und serie eine Uhrzeit HH:MM, wenn genannt, sonst leer.
+- thema: nur bei gedanke. Oberthema mit 1 bis 3 Wörtern. Passt ein bestehendes Thema, nimm genau dessen Namen. Sonst ein neues, allgemeines Thema wie "Garten", "Urlaub 2027", "Auto" oder "Geschenke".
+- wiedervorlage: nur bei gedanke, YYYY-MM-DD. Standard in 7 Tagen. Anlass mit Datum: 14 Tage davor. Nur Monat oder Jahreszeit: der 1. Tag davon (Frühjahr 1. März, Sommer 1. Juni, Herbst 1. September, Winter 1. Dezember). Nie in der Vergangenheit.
+- start: nur bei termin, YYYY-MM-DDTHH:MM, ohne Uhrzeit nur YYYY-MM-DD.
+- ende: nur bei termin mit Uhrzeit, YYYY-MM-DDTHH:MM. Ohne Angabe start plus 1 Stunde.
+- ganztags: true, wenn bei termin keine Uhrzeit genannt ist, sonst false.
+- rhythmus: nur bei serie: "woechentlich", "zweiwoechentlich", "monatlich" oder "jaehrlich".
+- naechstes: nur bei serie, das nächste Datum ab heute, YYYY-MM-DD.
+- serienart: nur bei serie: "geburtstag", "muell", "frist", "termin" (Training, Kurs, Treffen mit fester Uhrzeit) oder "sonstiges".
+- person: nur bei geburtstag, der Name der Person.
+- datum: nur bei essen, YYYY-MM-DD.
+- gericht: nur bei essen.
+Ein Termin ohne Datum wird eine aufgabe mit dem titel "Termin vereinbaren: ...".
+
+Antworte nur mit JSON in dieser Form:
+{"eintraege":[{"art":"","titel":"","text":"","menge":"","zustaendig":"","faellig":"","zeit":"","thema":"","wiedervorlage":"","start":"","ende":"","ganztags":false,"rhythmus":"","naechstes":"","serienart":"","person":"","datum":"","gericht":""}]}`;
+}
+async function capture(env, ctx, me, text) {
+  const users = (await activeUsers(env));
+  const T = (await allDocs(env, 'themen')).filter((x) => canRead(me, 'themen', x.data) && x.data.name && x.data.name !== 'Eingang');
+  const E = (await allDocs(env, 'eintraege')).filter((x) => canRead(me, 'eintraege', x.data));
+  const r = await runAI(env, capturePrompt(me, users, T.map((x) => x.data.name), text));
+  let items = r && Array.isArray(r.eintraege) && r.eintraege.length ? r.eintraege : null;
+  const fallback = !items;
+  if (fallback) { const parts = text.split(/\n|;|,|\.\s+/).map((x) => x.trim().replace(/\.$/, '')).filter(Boolean); items = (parts.length ? parts : [text]).map((x) => ({ art: 'eingang', titel: x.slice(0, 120), text: x })); }
+  const today = berlin().date, at = new Date().toISOString();
+  const fuerOf = (z) => {
+    const x = String(z || '').trim().toLowerCase();
+    if (!x || x === 'wir' || x === 'alle') return 'wir';
+    if (x === 'ich') return me.id;
+    const u = users.find((v) => v.name.toLowerCase() === x || v.name.toLowerCase().split(' ')[0] === x);
+    if (u) return u.id;
+    const others = users.filter((v) => v.id !== me.id && !v.profil);
+    return x === 'du' && others.length === 1 ? others[0].id : 'wir';
+  };
+  const label = (id) => (id === 'wir' ? '' : id === me.id ? '' : ' für ' + ((users.find((u) => u.id === id) || {}).name || ''));
+  const ok = (k) => ['edit', 'mine'].includes(lvl(me, KIND_AREA[k] || (k === 'serie' ? 'aufgaben' : k === 'essen' ? 'essen' : 'themen')));
+  const lines = [], undo = [], skipped = [], ops = [], ask = [];
+  const add = (coll, id, data) => { ops.push({ op: 'set', coll, id, data }); undo.push([coll, id]); };
+  let nIn = 0;
+  for (const it of items) {
+    let art = ['termin', 'einkauf', 'gedanke', 'aufgabe', 'serie', 'essen', 'nachricht', 'eingang'].includes(it.art) ? it.art : 'gedanke';
+    if (art === 'termin' && !/^\d{4}-\d\d-\d\d/.test(String(it.start || ''))) art = 'aufgabe';
+    if (!ok(art)) { if (ok('eingang') && art !== 'eingang') art = 'eingang'; else { skipped.push(String(it.titel || text)); continue; } }
+    const id = 'e-' + rid(8).toLowerCase().replace(/[^a-z0-9]/g, 'x');
+    const base = { kind: art, titel: String(it.titel || '').slice(0, 120) || text.slice(0, 60), text: String(it.text || text).slice(0, 1000), at, raw: text.slice(0, 1000) };
+    if (art === 'eingang') { add('eintraege', id, base); nIn++; continue; }
+    base.sicht = art === 'gedanke' && adult(me) ? 'erwachsene' : 'familie';
+    if (art === 'termin') {
+      const st = String(it.start);
+      Object.assign(base, { start: st.slice(0, 16), ende: String(it.ende || '').slice(0, 16), ganztags: !!it.ganztags || st.length <= 10, fuer: fuerOf(it.zustaendig) });
+      if (!adult(me)) base.vorschlag = true;
+      add('eintraege', id, base);
+      lines.push({ text: (base.vorschlag ? 'Vorschlag: ' : 'Termin: ') + base.titel + ', ' + relDe(st.slice(0, 10), today) + (base.ganztags ? '' : ' ' + st.slice(11, 16)), open: 'e:' + id });
+      continue;
+    }
+    if (art === 'serie') {
+      const rh = WDH.includes(it.rhythmus) ? it.rhythmus : 'jaehrlich';
+      let nx = isD(it.naechstes) ? it.naechstes : today;
+      for (let i = 0; nx < today && i < 600; i++) nx = rh === 'woechentlich' ? addDaysIso(nx, 7) : rh === 'zweiwoechentlich' ? addDaysIso(nx, 14) : addMonthsIso(nx, rh === 'monatlich' ? 1 : 12);
+      const sa = ['geburtstag', 'muell', 'frist', 'termin', 'sonstiges'].includes(it.serienart) ? it.serienart : 'sonstiges';
+      const asTermin = (sa === 'termin' || (isT(it.zeit) && sa !== 'muell')) && ok('termin');
+      if (asTermin) {
+        const d = { kind: 'termin', titel: base.titel, text: base.text, at, raw: base.raw, sicht: 'familie', start: nx + (isT(it.zeit) ? 'T' + it.zeit : ''), ganztags: !isT(it.zeit), wdh: rh, fuer: fuerOf(it.zustaendig) };
+        if (!adult(me)) d.vorschlag = true;
+        add('eintraege', id, d);
+        lines.push({ text: 'Serientermin: ' + d.titel + ', ' + ({ woechentlich: 'jede Woche', zweiwoechentlich: 'alle 2 Wochen', monatlich: 'jeden Monat', jaehrlich: 'jedes Jahr' }[rh]) + (isT(it.zeit) ? ' ' + it.zeit : ''), open: 'e:' + id });
+        ask.push({ coll: 'eintraege', id, is: 'termin' });
+      } else {
+        const sd = { titel: base.titel, text: base.text, rhythmus: rh === 'zweiwoechentlich' ? 'woechentlich' : rh, next: nx, art: sa === 'termin' ? 'sonstiges' : sa, person: String(it.person || '').slice(0, 60), vorlauf: sa === 'geburtstag' ? 14 : sa === 'muell' ? 1 : sa === 'frist' ? 14 : 0, fuer: fuerOf(it.zustaendig), at, zeit: isT(it.zeit) ? it.zeit : '' };
+        add('serien', id, sd);
+        lines.push({ text: 'Wiederkehrende Aufgabe: ' + sd.titel + ', ' + ({ woechentlich: 'jede Woche', monatlich: 'jeden Monat', jaehrlich: 'jedes Jahr' }[sd.rhythmus]), open: 's:' + id });
+        if (ok('termin') && sa !== 'geburtstag') ask.push({ coll: 'serien', id, is: 'aufgabe' });
+      }
+      continue;
+    }
+    if (art === 'essen') {
+      const d = isD(it.datum) ? it.datum : today, g = String(it.gericht || base.titel).slice(0, 120), fid = 'd-' + d;
+      const ex = await getDoc(env, 'essen', fid);
+      if (ex && !ex.deleted) ops.push({ op: 'update', coll: 'essen', id: fid, data: { gericht: g } }); else add('essen', fid, { datum: d, gericht: g });
+      lines.push({ text: 'Essen ' + relDe(d, today) + ': ' + g });
+      continue;
+    }
+    if (art === 'nachricht') { Object.assign(base, { done: false, readBy: [me.id] }); add('eintraege', id, base); lines.push({ text: 'Pinnwand: ' + base.text, open: 'e:' + id }); continue; }
+    if (art === 'aufgabe') {
+      Object.assign(base, { fuer: fuerOf(it.zustaendig), faellig: isD(it.faellig) ? it.faellig : '', zeit: isD(it.faellig) && isT(it.zeit) ? it.zeit : '', done: false });
+      add('eintraege', id, base);
+      lines.push({ text: 'Aufgabe' + label(base.fuer) + ': ' + base.titel + (base.faellig ? ', ' + relDe(base.faellig, today) : ''), open: 'e:' + id });
+      continue;
+    }
+    if (art === 'einkauf') {
+      const ex = E.find((x) => x.data.kind === 'einkauf' && !x.data.done && String(x.data.titel).toLowerCase() === base.titel.toLowerCase());
+      if (ex) { lines.push({ text: 'Steht schon auf der Liste: ' + ex.data.titel }); continue; }
+      Object.assign(base, { done: false, menge: String(it.menge || '').slice(0, 40) });
+      add('eintraege', id, base);
+      lines.push({ text: 'Einkauf: ' + base.titel + (base.menge ? ' (' + base.menge + ')' : ''), open: 'e:' + id });
+      continue;
+    }
+    // Idee
+    let name = String(it.thema || 'Allgemein').trim().slice(0, 60) || 'Allgemein';
+    const ex = T.find((x) => x.data.name.toLowerCase() === name.toLowerCase());
+    if (ex) name = ex.data.name;
+    let wv = isD(it.wiedervorlage) ? it.wiedervorlage : addDaysIso(today, 7);
+    if (wv < today) wv = today;
+    Object.assign(base, { kind: 'gedanke', thema: name });
+    add('eintraege', id, base);
+    if (ex) {
+      const nd = ex.data.done ? wv : ex.data.due && ex.data.due < wv ? ex.data.due : wv;
+      if (ex.data.done || nd !== ex.data.due) ops.push({ op: 'update', coll: 'themen', id: ex.id, data: { done: false, due: nd } });
+      lines.push({ text: 'Idee zu „' + name + '“', open: 't:' + ex.id });
+    } else {
+      const tid = slugify(name) || 't-' + rid(6);
+      if (!T.find((x) => x.id === tid)) { add('themen', tid, { name, due: wv, done: false, at, sicht: base.sicht }); T.push({ id: tid, data: { name } }); }
+      lines.push({ text: 'Neue Idee „' + name + '“, meldet sich am ' + wv.split('-').reverse().join('.'), open: 't:' + tid });
+    }
+  }
+  if (nIn) lines.push({ text: (fallback ? 'Nicht automatisch sortiert: ' : '') + nIn + (nIn === 1 ? ' Notiz liegt' : ' Notizen liegen') + ' im Eingang unter „Ideen“.' });
+  if (skipped.length) lines.push({ text: 'Nicht gespeichert, dafür fehlt dir die Berechtigung: ' + skipped.join(', ') });
+  const res = ops.length ? await applyOps(env, ctx, me, ops) : { ok: true };
+  if (res.error) return { lines: [{ text: 'Nicht gespeichert: ' + res.error }], undo: [], ask: [] };
+  return { lines, undo, ask };
 }
 
 /* ---------------- Routen ---------------- */
@@ -713,49 +952,28 @@ async function handleApi(req, env, ctx, url) {
     return json({ now: max, docs });
   }
   if (p === '/api/write' && req.method === 'POST') {
-    const ops = Array.isArray(body.ops) ? body.ops.slice(0, 50) : [];
-    const calTouch = new Set(), calGone = [], events = [];
-    for (const o of ops) {
-      if (!COLLS.includes(o.coll) || !/^[\w-]{1,80}$/.test(String(o.id || ''))) return bad('Ungültiger Eintrag.');
-      const cur = await getDoc(env, o.coll, o.id);
-      const old = cur && !cur.deleted ? cur.data : null;
-      if (old && !canWrite(me, o.coll, null, old)) return bad('Dafür fehlt dir die Berechtigung.', 403);
-      if (o.op === 'delete') {
-        if (old && old.by !== me.id && lvl(me, docArea(o.coll, old)) === 'mine') return bad('Dafür fehlt dir die Berechtigung.', 403);
-        if (!old) continue;
-        await deleteDoc(env, o.coll, o.id);
-        if (o.coll === 'eintraege' && old.kind === 'termin') calGone.push(old);
-        continue;
-      }
-      if (!o.data || typeof o.data !== 'object' || JSON.stringify(o.data).length > 20000) return bad('Ungültige Daten.');
-      let data;
-      if (o.op === 'set') data = { ...o.data };
-      else if (o.op === 'update') { if (!old) return bad('Eintrag existiert nicht.', 404); data = { ...old, ...o.data }; }
-      else return bad('Unbekannte Aktion.');
-      for (const k of ['kalender', 'calUid', 'calUrl', 'calSig', 'calErr']) { if (old && k in old) data[k] = old[k]; else if (!old) delete data[k]; }
-      if (!old) data.by = me.id;
-      else data.by = old.by || data.by;
-      if (!['familie', 'erwachsene', 'privat'].includes(data.sicht || 'familie')) data.sicht = 'familie';
-      if (o.coll === 'eintraege' && data.kind === 'termin' && !adult(me) && (!old || old.vorschlag || old.kind !== 'termin')) data.vorschlag = true;
-      if (!canWrite(me, o.coll, data, old)) return bad('Dafür fehlt dir die Berechtigung.', 403);
-      await putDoc(env, o.coll, o.id, data);
-      if (o.coll === 'eintraege') {
-        if (data.kind === 'nachricht' && !old) events.push({ type: 'pin', data });
-        if (data.kind === 'termin' && data.vorschlag && (!old || !old.vorschlag)) events.push({ type: 'vorschlag', data });
-        if (data.kind === 'aufgabe' && !data.done && data.fuer && data.fuer !== 'wir' && data.fuer !== me.id && (!old || old.fuer !== data.fuer)) events.push({ type: 'zuweisung', data });
-      }
-      if (o.coll === 'eintraege' && (data.kind === 'termin' || (old && old.kind === 'termin'))) {
-        if (data.kind === 'termin') calTouch.add(o.id); else if (old) calGone.push(old);
-      }
-    }
-    if (events.length) ctx.waitUntil(onWrite(env, me, events).catch(() => {}));
-    if (calTouch.size || calGone.length) {
-      ctx.waitUntil((async () => {
-        for (const g of calGone) await calDelete(env, g);
-        for (const id of calTouch) { try { await calPut(env, id); } catch (e) { await calMark(env, id, e.message); } }
-      })());
-    }
+    const r = await applyOps(env, ctx, me, Array.isArray(body.ops) ? body.ops.slice(0, 50) : []);
+    return r.error ? bad(r.error, r.status || 400) : json({ ok: true });
+  }
+  if (p === '/api/capture' && req.method === 'POST') {
+    if (!canCapture(me)) return bad('Dafür fehlt dir die Berechtigung.', 403);
+    const text = String(body.text || '').trim().slice(0, 2000);
+    if (!text) return bad('Bitte etwas eingeben.');
+    return json(await capture(env, ctx, me, text));
+  }
+  if (p === '/api/token' && req.method === 'POST') {
+    const t = rid(24);
+    await env.DB.prepare('DELETE FROM tokens WHERE user_id=?').bind(me.id).run();
+    await env.DB.prepare('INSERT INTO tokens(hash,user_id,created) VALUES(?,?,?)').bind(await sha(t), me.id, nowIso()).run();
+    return json({ link: url.origin + '/q/' + t });
+  }
+  if (p === '/api/token' && req.method === 'DELETE') {
+    await env.DB.prepare('DELETE FROM tokens WHERE user_id=?').bind(me.id).run();
     return json({ ok: true });
+  }
+  if (p === '/api/token') {
+    const r = await env.DB.prepare('SELECT created FROM tokens WHERE user_id=?').bind(me.id).first();
+    return json({ exists: !!r, created: r ? r.created : '' });
   }
   if (p === '/api/ai' && req.method === 'POST') {
     if (!canCapture(me)) return bad('Dafür fehlt dir die Berechtigung.', 403);
@@ -922,7 +1140,27 @@ async function tick(env, ms) {
   }
   return out;
 }
-export const _test = { tick, parseEvents, inQuiet, normPrefs, housekeeping, weeklyBackup, getCred };
+export const _test = { tick, parseEvents, inQuiet, normPrefs, housekeeping, weeklyBackup, getCred, onDay, buildIcs };
+
+async function quick(req, env, ctx, url) {
+  const txt = (m, st = 200) => new Response(m, { status: st, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
+  const key = url.pathname.slice(3);
+  if (!/^[\w-]{20,64}$/.test(key)) return txt('Der Link ist ungültig.', 404);
+  const t = await env.DB.prepare('SELECT user_id FROM tokens WHERE hash=?').bind(await sha(key)).first();
+  const u = t && (await env.DB.prepare('SELECT * FROM users WHERE id=? AND active=1').bind(t.user_id).first());
+  if (!u) return txt('Der Link ist nicht mehr gültig. Hol dir in der Family App einen neuen.', 403);
+  const me = pub(u);
+  if (req.method === 'GET') return txt('Family App: Hallo ' + me.name + ', dein Link funktioniert.');
+  if (req.method !== 'POST') return txt('Nur POST.', 405);
+  const ct = req.headers.get('content-type') || '';
+  let text = '';
+  if (ct.includes('json')) { const b = await req.json().catch(() => ({})); text = b.text || b.Text || b.diktat || ''; } else text = await req.text();
+  text = String(text || '').trim().slice(0, 2000);
+  if (!text) return txt('Ich habe nichts verstanden. Bitte noch einmal.');
+  if (!canCapture(me)) return txt('Dafür fehlt dir die Berechtigung.', 403);
+  const r = await capture(env, ctx, me, text);
+  return txt(r.lines.map((l) => l.text).join('\n') || 'Gemerkt.');
+}
 
 const MANIFEST = JSON.stringify({
   name: 'Family App', short_name: 'Family', start_url: '/', scope: '/', display: 'standalone', background_color: '#eef3f8', theme_color: '#2f5d84', lang: 'de',
@@ -940,6 +1178,7 @@ export default {
         if (req.method !== 'GET' && req.headers.get('origin') && req.headers.get('origin') !== url.origin) return bad('Ungültige Herkunft.', 403);
         return await handleApi(req, env, ctx, url);
       }
+      if (url.pathname.startsWith('/q/')) { await init(env); return await quick(req, env, ctx, url); }
       if (url.pathname === '/sw.js') return new Response(SW_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' } });
       if (url.pathname === '/manifest.webmanifest') return new Response(MANIFEST, { headers: { 'content-type': 'application/manifest+json' } });
       if (url.pathname === '/icon-180.png' || url.pathname === '/apple-touch-icon.png') return png(ICON_180);

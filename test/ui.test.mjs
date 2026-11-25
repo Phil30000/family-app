@@ -181,6 +181,22 @@ try {
   await ph.waitForSelector('#newu :text("Lina ist angelegt")');
   await ph.screenshot({ path: 'test/shot-einstellungen2.png', fullPage: true });
 
+  // Paket B: Zeile in der Meldung öffnet den Eintrag, Serie Termin/Aufgabe, Vorkommen absagen, Kurzbefehl-Link
+  await ph.click('.tab[data-v=heute]');
+  t = await capture(ph, 'Max hat jeden Dienstag 17:30 Training', 'Serientermin');
+  await ph.click('.toast [data-x=ask]'); await ph.waitForSelector('.toast:has-text("wiederkehrende Aufgabe")');
+  await ph.click('.toast [data-x=open]'); await ph.waitForSelector('.sheet [name=rhythmus]'); await ph.click('.sheet [data-close]');
+  await capture(ph, 'Max hat jeden Dienstag 17:30 Training', 'Serientermin');
+  await ph.click('.tab[data-v=kalender]');
+  assert.ok(await ph.locator('.ev:has-text("Training Max")').count() >= 4, 'Serie erscheint jede Woche');
+  assert.match(await ph.locator('.ev:not(.ext):has-text("Training Max")').first().textContent(), /jede Woche/);
+  await ph.locator('.ev:not(.ext):has-text("Training Max")').nth(1).click(); await ph.click('.sheet [data-a=skip]'); await ph.waitForTimeout(200);
+  const nSerie = await ph.locator('.ev:not(.ext):has-text("Training Max")').count();
+  assert.ok(nSerie >= 3, 'ein Termin abgesagt, Rest bleibt');
+  await ph.click('#gear'); await ph.click('[data-a=qnew]'); await ph.waitForSelector('[aria-label="Dein persönlicher Link"]');
+  const qlink = await ph.inputValue('[aria-label="Dein persönlicher Link"]'); assert.match(qlink, /\/q\//);
+  const qr = await fetch(qlink.replace(/^https?:\/\/[^/]+/, B), { method: 'POST', body: 'Milch' }); assert.match(await qr.text(), /Milch/);
+
   // Essensplan + Zutaten
   await ph.click('.tab[data-v=einkauf]'); await ph.click('summary:has-text("Essensplan")');
   const meal = ph.locator(`[data-d="${today}"] input`); await meal.fill('Lasagne'); await meal.press('Enter');

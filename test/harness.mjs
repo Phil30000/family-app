@@ -29,6 +29,7 @@ function fakeAI(prompt) {
   const out = [];
   if (/Zahnarzt/i.test(text)) out.push({ art: 'termin', titel: 'Zahnarzt', text: 'Zahnarzt', start: '2026-12-01T15:00', ende: '', ganztags: false });
   if (/TÜV/i.test(text)) out.push({ art: 'aufgabe', titel: 'TÜV machen', text: 'Conny muss den TÜV machen.', zustaendig: 'Conny', faellig: '' });
+  if (/Training/i.test(text)) out.push({ art: 'serie', titel: 'Training Max', text: 'Jeden Dienstag 17:30 Training', rhythmus: 'woechentlich', naechstes: '2026-12-01', serienart: 'termin', zeit: '17:30', zustaendig: 'Max' });
   if (/Restmüll/i.test(text)) out.push({ art: 'serie', titel: 'Restmüll rausstellen', text: 'Jeden Dienstag Restmüll', rhythmus: 'woechentlich', naechstes: '2026-12-01', serienart: 'muell', zustaendig: 'wir' });
   if (/Lasagne/i.test(text)) out.push({ art: 'essen', titel: 'Lasagne', datum: '2026-11-27', gericht: 'Lasagne' });
   if (/Milch/i.test(text)) out.push({ art: 'einkauf', titel: 'Milch', text: 'Milch kaufen' });

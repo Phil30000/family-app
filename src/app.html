@@ -321,6 +321,7 @@ const sichtOpts=cur=>opts(SICHT.filter(([k])=>k!=='erwachsene'||isAdult()),cur||
 
 /* ---------- Daten-Auswahl ---------- */
 const t0=()=>today();
+const activePins=()=>canSee('pinnwand')?E.filter(e=>e.kind==='nachricht'&&!e.done).sort((a,b)=>String(b.at).localeCompare(String(a.at))):[];
 const unreadPins=()=>canSee('pinnwand')?E.filter(e=>e.kind==='nachricht'&&!e.done&&!(e.readBy||[]).includes(meId)).sort((a,b)=>String(b.at).localeCompare(String(a.at))):[];
 const proposals=()=>isAdult()&&lvl('termine')==='edit'?E.filter(e=>e.kind==='termin'&&e.vorschlag).sort((a,b)=>String(a.start).localeCompare(String(b.start))):[];
 const WDH=[['','Nicht wiederholen'],['woechentlich','Jede Woche'],['zweiwoechentlich','Alle 2 Wochen'],['monatlich','Jeden Monat'],['jaehrlich','Jedes Jahr']];
@@ -384,6 +385,21 @@ function newItems(){
   return out.sort((a,b)=>(META.get('eintraege:'+b.id)||0)-(META.get('eintraege:'+a.id)||0));
 }
 const KL={termin:'Termin',aufgabe:'Aufgabe',einkauf:'Einkauf',gedanke:'Idee',thema:'Idee'};
+function pinCard(e,all){
+  const mine=e.by===meId,read=(e.readBy||[]).includes(meId);
+  return `<div class="pin" data-e="${esc(e.id)}" style="margin:6px 0"><p><small>${esc(who(e.by)||'')} · ${esc(relDay(String(e.at||'').slice(0,10)))}</small>${esc(e.text||e.titel)}</p>${mine||isAdult()?`<button class="x" data-a="pinoff" aria-label="Abnehmen (für alle)" title="Abnehmen">✓</button>`:''}${!all&&!read?`<button class="x" data-a="pinread" aria-label="Gelesen, für mich ausblenden">×</button>`:''}</div>`;
+}
+function vPinnwand(){
+  const all=activePins();
+  let h=`<button class="link back" data-go="heute">‹ Heute</button>`;
+  h+=card('Pinnwand',(all.map(e=>pinCard(e,true)).join('')||'<p class="empty">Gerade hängt nichts.</p>')+(canWrite('pinnwand')?'<button class="link" data-a="pinnew">+ Etwas anpinnen</button>':''));
+  h+=`<p class="meta" style="padding:0 4px">× blendet einen Hinweis nur für dich aus. ✓ nimmt ihn für alle ab (wer ihn angepinnt hat oder Erwachsene).</p>`;
+  return h;
+}
+function openPin(){
+  sheet(`<h2>An die Pinnwand<button class="x" data-close aria-label="Schließen">×</button></h2><form id="pinf"><textarea class="field" name="t" placeholder="z. B. Paket liegt beim Nachbarn. Oder: Bin heute erst um 19 Uhr zu Hause." aria-label="Hinweis" style="width:100%" required></textarea><p class="meta">Alle anderen bekommen eine Mitteilung (außer in ihrer Ruhezeit).</p><div class="row"><button class="btn main" type="submit">Anpinnen</button></div></form>`);
+  setTimeout(()=>{const t=document.querySelector('#pinf textarea');if(t)t.focus()},60);
+}
 function vHeute(){
   let h='';
   for(const w of (ME.warnings||[]))h+=`<div class="warn-card" role="alert">${esc(w)} <button class="link" data-go="mehr" style="color:inherit;text-decoration:underline;min-height:0;padding:0">Zu den Einstellungen</button></div>`;
@@ -392,7 +408,10 @@ function vHeute(){
   const nw=newItems();
   if(nw.length){const buy=nw.filter(e=>e.kind==='einkauf');const rest=nw.filter(e=>e.kind!=='einkauf');
     h+=card(`Neu seit deinem letzten Besuch (${nw.length})`,rest.slice(0,6).map(e=>`<button class="ev" data-open="${e.kind==='thema'?'t:':'e:'}${esc(e.id)}"><span class="tm"><small>${esc(KL[e.kind]||'')}</small></span><span><span class="tt">${esc(e.titel)}</span><span class="sm">von ${esc(who(e.by)||'?')}</span></span></button>`).join('')+(buy.length?`<button class="link" data-go="einkauf">${buy.length} neu auf der Einkaufsliste: ${esc(buy.slice(0,4).map(e=>e.titel).join(', '))}${buy.length>4?' …':''}</button>`:'')+`<div class="row" style="padding-bottom:8px"><button class="btn sm" data-a="seen">Alles gesehen</button></div>`)}
-  for(const e of unreadPins())h+=`<div class="pin" data-e="${esc(e.id)}"><p><small>Pinnwand · ${esc(who(e.by)||'')} · ${esc(relDay(String(e.at||'').slice(0,10)))}</small>${esc(e.text||e.titel)}</p>${canWrite('pinnwand')||e.by===meId?`<button class="x" data-a="pinread" aria-label="Gelesen, ausblenden">×</button>`:''}</div>`;
+  if(canSee('pinnwand')){const up=unreadPins(),all=activePins();
+    let pb=up.map(pinCard).join('');
+    if(!up.length)pb+=`<p class="empty" style="margin:0">${all.length?'Alles gelesen.':'Hier hängen Hinweise für alle, z. B. „Paket liegt beim Nachbarn“.'}</p>`;
+    h+=`<section class="card" style="padding-bottom:6px"><h2>Pinnwand${all.length?`<button class="link more" data-go="pinnwand">Alle (${all.length})</button>`:''}</h2>${pb}${canWrite('pinnwand')?'<button class="link" data-a="pinnew">+ Etwas anpinnen</button>':''}</section>`}
   const ps=proposals();
   if(ps.length)h+=card('Vorschläge zum Bestätigen',ps.map(evRow).join(''));
   if(canSee('termine')){const a=eventsOn(t0()),b=eventsOn(addDays(t0(),1));
@@ -625,7 +644,7 @@ function vFamilie(){
   const bk=`<p class="meta">Jeden Sonntag wird automatisch eine Sicherung angelegt (die letzten 6 bleiben). Zusätzlich kannst du eine Datei auf dein Gerät laden.</p><div class="row" style="margin-bottom:8px"><a class="btn sm" href="/api/admin/export" download>Sicherung herunterladen</a><label class="btn sm" style="cursor:pointer">Aus Datei wiederherstellen<input type="file" accept="application/json,.json" data-a="restorefile" hidden></label></div>${backups&&backups.length?`<details${dk('bk')}><summary>Automatische Sicherungen (${backups.length})</summary>${backups.map(x=>`<div class="row" style="padding:4px 0"><span style="flex:1">${esc(new Date(x.created).toLocaleString('de-DE',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</span><button class="btn sm" data-a="restorebk" data-id="${x.id}">Wiederherstellen</button></div>`).join('')}</details>`:''}`;
   return card('Familie',fam+b)+card('iPhone-Kalender',c)+card('Datensicherung',bk);
 }
-const VIEWS={wand:['Wand',vWand,null],infos:['Familien-Infos',vInfos,'pinnwand'],suche:['Suche',vSuche,null],heute:['Heute',vHeute,null],kalender:['Kalender',vKalender,'termine'],einkauf:['Einkauf',vEinkauf,'einkauf|essen'],ideen:['Ideen',vIdeen,'themen'],aufgaben:['Aufgaben',vAufgaben,'aufgaben'],mehr:['Einstellungen',vMehr,null]};
+const VIEWS={pinnwand:['Pinnwand',vPinnwand,'pinnwand'],wand:['Wand',vWand,null],infos:['Familien-Infos',vInfos,'pinnwand'],suche:['Suche',vSuche,null],heute:['Heute',vHeute,null],kalender:['Kalender',vKalender,'termine'],einkauf:['Einkauf',vEinkauf,'einkauf|essen'],ideen:['Ideen',vIdeen,'themen'],aufgaben:['Aufgaben',vAufgaben,'aufgaben'],mehr:['Einstellungen',vMehr,null]};
 let TABS=['heute','kalender','einkauf','ideen'];
 const allowedView=v=>{const a=VIEWS[v]&&VIEWS[v][2];return !!VIEWS[v]&&(!a||a.split('|').some(canSee))};
 function renderBar(){
@@ -741,6 +760,8 @@ $('#sheetRoot').addEventListener('submit',async ev=>{
     await upd('themen',t.id,{name,due:isDate(fd.due)?fd.due:t.due,sicht:fd.sicht});
     for(const e of themeEntries(t.name))if(e.by===meId||isAdult())await upd('eintraege',e.id,{thema:name,sicht:fd.sicht});
     toast('Gespeichert.');return}
+  if(fm0.id==='pinf'){ev.preventDefault();const t=String(new FormData(fm0).get('t')||'').trim().slice(0,500);if(!t)return;closeSheet();
+    await put('eintraege',uid(),{kind:'nachricht',titel:t.slice(0,60),text:t,by:meId,at:new Date().toISOString(),done:false,readBy:[meId],sicht:'familie'});toast('Angepinnt. Die anderen bekommen eine Mitteilung.');return}
   if(fm0.id==='listf'){ev.preventDefault();const fd=Object.fromEntries(new FormData(fm0));const name=String(fd.name||'').trim().slice(0,40);if(!name)return;const id=fm0.dataset.l||('l-'+uid().slice(2));closeSheet();
     if(fm0.dataset.l)await upd('listen',id,{name,typ:fd.typ==='liste'?'liste':'einkauf'});else{await put('listen',id,{name,typ:fd.typ==='liste'?'liste':'einkauf',at:new Date().toISOString()});curList=id;LS.set('fa-list',id)}render();return}
   if(fm0.id==='infof'){ev.preventDefault();return saveInfo(fm0)}
@@ -859,6 +880,7 @@ $('#p').addEventListener('click',async ev=>{
   const tEl=btn.closest('[data-t]'),eEl=btn.closest('[data-e]'),dEl=btn.closest('[data-d]'),uEl=btn.closest('[data-u]');
   try{
     if(a==='pushon')return enablePush();
+    if(a==='pinnew'){openPin();return}
     if(a==='list'){curList=btn.dataset.l;LS.set('fa-list',curList);render();return}
     if(a==='listadd'){openList();return}
     if(a==='listedit'){openList(listOf(curList));return}
@@ -908,6 +930,7 @@ $('#p').addEventListener('click',async ev=>{
       if(ch){await upd('themen',t.id,ch);if(a==='tdone')toast('Abgeschlossen: '+t.name,()=>upd('themen',t.id,{done:false}))}
       return}
     if(eEl){const e=E.find(x=>x.id===eEl.dataset.e);if(!e)return;
+      if(a==='pinoff'){await upd('eintraege',e.id,{done:true,doneAt:new Date().toISOString()});toast('Abgenommen.',()=>upd('eintraege',e.id,{done:false}));return}
       if(a==='pinread'){const rb=Array.from(new Set((e.readBy||[]).concat(meId)));await upd('eintraege',e.id,{readBy:rb});toast('Ausgeblendet.',()=>upd('eintraege',e.id,{readBy:(e.readBy||[]).filter(x=>x!==meId)}));return}
       if(a==='del'){await del('eintraege',e.id);return}
       if(a==='x-ai'){btn.disabled=true;await capture(e.text||e.titel);await del('eintraege',e.id);return}

@@ -236,6 +236,15 @@ try {
   await fresh.waitForSelector('.sheet:has-text("Willkommen")'); await fresh.screenshot({ path: 'test/shot-intro.png' });
   await fresh.click('.sheet [data-a=startcap]'); await fresh.waitForSelector('#t');
 
+  // Pinnwand: anpinnen, Übersicht, abnehmen
+  await ph.click('.tab[data-v=heute]'); await ph.click('[data-a=pinnew]');
+  await ph.fill('#pinf textarea', 'Oma kommt Sonntag zum Kaffee'); await ph.click('#pinf [type=submit]');
+  await ph.waitForSelector('.toast:has-text("Angepinnt")');
+  await ph.click('[data-go=pinnwand]'); await ph.waitForSelector('.pin:has-text("Oma kommt Sonntag")');
+  await ph.screenshot({ path: 'test/shot-pinnwand.png', fullPage: true });
+  await ph.locator('.pin:has-text("Oma kommt Sonntag") [data-a=pinoff]').click(); await ph.waitForTimeout(200);
+  assert.equal(await ph.locator('.pin:has-text("Oma kommt Sonntag")').count(), 0, 'abgenommen');
+
   // Paket D: Listen, Einkaufs-Hinweis, Wochenvorschau, Face ID
   await ph.click('.tab[data-v=einkauf]'); await ph.click('[data-a=listadd]');
   await ph.fill('#listf [name=name]', 'Packliste Urlaub'); await ph.selectOption('#listf [name=typ]', 'liste'); await ph.click('#listf [type=submit]');

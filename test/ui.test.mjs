@@ -236,6 +236,27 @@ try {
   await fresh.waitForSelector('.sheet:has-text("Willkommen")'); await fresh.screenshot({ path: 'test/shot-intro.png' });
   await fresh.click('.sheet [data-a=startcap]'); await fresh.waitForSelector('#t');
 
+  // Paket D: Listen, Einkaufs-Hinweis, Wochenvorschau, Face ID
+  await ph.click('.tab[data-v=einkauf]'); await ph.click('[data-a=listadd]');
+  await ph.fill('#listf [name=name]', 'Packliste Urlaub'); await ph.selectOption('#listf [name=typ]', 'liste'); await ph.click('#listf [type=submit]');
+  await ph.waitForSelector('.card:has-text("Packliste Urlaub")');
+  await ph.fill('#buyIn', 'Sonnencreme, Pässe'); await ph.press('#buyIn', 'Enter'); await ph.waitForSelector('.task:has-text("Pässe")');
+  await ph.locator('.task:has-text("Pässe") input').click(); await ph.waitForTimeout(150);
+  assert.equal(await ph.locator('.task.done:has-text("Pässe")').count(), 1, 'Haken bleibt sichtbar');
+  await ph.click('[data-a=listreset]'); await ph.waitForTimeout(150); assert.equal(await ph.locator('.task.done').count(), 0);
+  await ph.screenshot({ path: 'test/shot-packliste.png', fullPage: true });
+  await ph.click('[data-a=list][data-l=""]'); assert.equal(await ph.locator('.tile:has-text("Sonnencreme")').count(), 0, 'Listen getrennt');
+  await ph.click('[data-a=shopgo]'); await ph.waitForSelector('.toast');
+  await ph.click('#gear'); await ph.check('[name=wocheAus]'); await ph.click('#prefs [type=submit]'); await ph.waitForSelector('.toast:has-text("Zeiten gespeichert")');
+  assert.equal(JSON.parse((await env.DB.prepare("SELECT prefs FROM users WHERE name='Philippe'").first()).prefs).woche, 'aus');
+  // Face ID mit virtuellem Authenticator
+  const cdp = await ph.context().newCDPSession(ph);
+  await cdp.send('WebAuthn.enable');
+  await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true } });
+  await ph.click('#gear'); await ph.click('[data-a=fidadd]'); await ph.waitForSelector('.toast:has-text("Face ID ist eingerichtet")');
+  await ph.click('[data-a=logout]'); await ph.waitForSelector('#fidlogin'); await ph.click('#fidlogin');
+  await ph.waitForSelector('.tab[data-v=heute]'); assert.match(await ph.textContent('#hello'), /Philippe/);
+
   // Essensplan + Zutaten
   await ph.click('.tab[data-v=einkauf]'); await ph.click('summary:has-text("Essensplan")');
   const meal = ph.locator(`[data-d="${today}"] input`); await meal.fill('Lasagne'); await meal.press('Enter');

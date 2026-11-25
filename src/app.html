@@ -237,9 +237,9 @@ const ICON={
  einkauf:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L21 8H6.2"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/></svg>',
  ideen:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>'
 };
-let ME=null,USERS=[],CAL=null,meId=null,meName='',FAMILY='',credInfo=null,backups=null,pushChecked=false,quickLink='',quickExists=false;
+let fidCount=0,ME=null,USERS=[],CAL=null,meId=null,meName='',FAMILY='',credInfo=null,backups=null,pushChecked=false,quickLink='',quickExists=false;
 const openD=new Set();const dk=k=>` data-keep="${k}"${openD.has(k)?' open':''}`;
-let I=[],calMode='liste',calAnchor='',sq='',E=[],T=[],S=[],F=[],X=[],XERR='',view='heute',sub='',q='',mineOnly=true,adminUsers=null,calList=null,pushOn=false,openTopics=new Set();
+let I=[],Ls=[],curList='',calMode='liste',calAnchor='',sq='',E=[],T=[],S=[],F=[],X=[],XERR='',view='heute',sub='',q='',mineOnly=true,adminUsers=null,calList=null,pushOn=false,openTopics=new Set();
 
 /* ---------- Server, Zwischenspeicher, Offline-Warteschlange ---------- */
 async function api(path,body,method){
@@ -249,7 +249,7 @@ async function api(path,body,method){
   return d;
 }
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const store={eintraege:new Map(),themen:new Map(),serien:new Map(),essen:new Map(),infos:new Map()};const META=new Map();let newSince=0;
+const store={eintraege:new Map(),themen:new Map(),serien:new Map(),essen:new Map(),infos:new Map(),listen:new Map()};const META=new Map();let newSince=0;
 const subs={};let since=0,pulling=false,queue=LS.get('fa-q',[]);
 const snap=c=>[...store[c].entries()].map(([id,data])=>({id,data}));
 function emit(c){(subs[c]||[]).forEach(f=>f(snap(c)))}
@@ -348,7 +348,10 @@ const dueTasks=()=>openTasks().filter(e=>isMine(e)&&(!e.faellig||e.faellig<=t0()
 const doneToday=()=>E.filter(e=>e.kind==='aufgabe'&&e.done&&String(e.doneAt||'').slice(0,10)===t0()&&isMine(e));
 const dueTopics=()=>canSee('themen')?T.filter(t=>!t.done&&t.due&&t.due<=t0()):[];
 const inbox=()=>canSee('themen')?E.filter(e=>e.kind==='eingang'||(e.kind==='gedanke'&&e.thema==='Eingang')).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||''))):[];
-const buyList=()=>E.filter(e=>e.kind==='einkauf'&&!e.done);
+const listOf=id=>Ls.find(l=>l.id===id);
+const isCheck=e=>{const l=listOf(e.liste||'');return !!l&&l.typ==='liste'};
+const buyList=()=>E.filter(e=>e.kind==='einkauf'&&!e.done&&!isCheck(e));
+const inList=e=>(listOf(e.liste||'')?e.liste:'')===curList;
 function themeEntries(name){const n=String(name).toLowerCase();return E.filter(e=>e.kind==='gedanke'&&String(e.thema||'').toLowerCase()===n).sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')))}
 
 /* ---------- Bausteine ---------- */
@@ -496,19 +499,34 @@ function weekCard(){
 function vEinkauf(){
   let h='';
   if(canSee('einkauf')){
-    const xs=buyList();const w=canWrite('einkauf');
-    let b=w?`<form class="add" id="addBuy"><input class="field" id="buyIn" placeholder="Was fehlt? z. B. Milch, Brot" aria-label="Artikel hinzufügen" autocomplete="off" enterkeyhint="done"><button class="btn main" type="submit">+</button></form>`:'';
-    if(!xs.length)b+='<p class="empty">Alles da. Die Liste ist leer.</p>';
-    const by={};for(const e of xs){const k=e.kat||katOf(e.titel);(by[k]=by[k]||[]).push(e)}
-    for(const k of KAT_ORDER)if(by[k])b+=`<p class="day">${esc(k)}</p><div class="tiles">${by[k].sort((a,c)=>a.titel.localeCompare(c.titel,'de')).map(e=>`<button class="tile" data-buy="${esc(e.id)}">${esc(e.titel)}${e.menge?`<small>${esc(e.menge)}</small>`:''}</button>`).join('')}</div>`;
-    if(xs.length&&w)b+='<p class="meta">Antippen = gekauft. Lange drücken = bearbeiten.</p>';
-    const seen=new Set(xs.map(e=>e.titel.toLowerCase()));const recent=[];
-    for(const e of E.filter(e=>e.kind==='einkauf'&&e.done).sort((a,c)=>String(c.doneAt||c.at||'').localeCompare(String(a.doneAt||a.at||'')))){const k=e.titel.toLowerCase();if(seen.has(k))continue;seen.add(k);recent.push(e);if(recent.length>=24)break}
-    if(recent.length&&w)b+=`<details${dk('recent')}><summary>Zuletzt gekauft</summary><div class="chips">${recent.map(e=>`<button class="chip" data-again="${esc(e.id)}">+ ${esc(e.titel)}</button>`).join('')}</div></details>`;
-    h+=card('Einkaufsliste',b);
+    if(curList&&!listOf(curList))curList='';
+    const cur=listOf(curList);const check=cur&&cur.typ==='liste';const w=canWrite('einkauf');
+    const cnt=id=>E.filter(e=>e.kind==='einkauf'&&!e.done&&(listOf(e.liste||'')?e.liste:'')===id).length;
+    h+=`<div class="chips" style="margin:0 0 10px">${[{id:'',name:'Einkauf'}].concat(Ls.slice().sort((a,b)=>a.name.localeCompare(b.name,'de'))).map(l=>`<button class="chip" data-a="list" data-l="${esc(l.id)}" aria-pressed="${l.id===curList}" style="${l.id===curList?'background:#2f5d84;color:#fff;border-color:#2f5d84':''}">${esc(l.name)}${cnt(l.id)?' · '+cnt(l.id):''}</button>`).join('')}${w?'<button class="chip" data-a="listadd">+ Liste</button>':''}</div>`;
+    const xs=E.filter(e=>e.kind==='einkauf'&&inList(e)&&(check||!e.done));
+    let b=w?`<form class="add" id="addBuy"><input class="field" id="buyIn" placeholder="${check?'Was gehört dazu?':'Was fehlt? z. B. Milch, Brot'}" aria-label="Artikel hinzufügen" autocomplete="off" enterkeyhint="done"><button class="btn main" type="submit" aria-label="Hinzufügen">+</button></form>`:'';
+    if(!xs.length)b+=`<p class="empty">${check?'Noch leer.':'Alles da. Die Liste ist leer.'}</p>`;
+    if(check){
+      b+=xs.sort((a,c)=>(a.done?1:0)-(c.done?1:0)||a.titel.localeCompare(c.titel,'de')).map(e=>`<div class="task${e.done?' done':''}" data-e="${esc(e.id)}"><input type="checkbox" data-a="tick" aria-label="${esc(e.titel)}"${e.done?' checked':''}${w?'':' disabled'}><button class="tb" data-open="e:${esc(e.id)}"><span class="tt">${esc(e.titel)}</span>${e.menge?`<span class="sm">${esc(e.menge)}</span>`:''}</button></div>`).join('');
+      const d=xs.filter(e=>e.done).length;
+      if(w&&xs.length)b+=`<div class="row" style="padding:8px 0"><span class="meta" style="flex:1">${d} von ${xs.length} abgehakt</span>${d?'<button class="btn sm" data-a="listreset">Alle Haken entfernen</button>':''}</div>`;
+    }else{
+      const by={};for(const e of xs){const k=e.kat||katOf(e.titel);(by[k]=by[k]||[]).push(e)}
+      for(const k of KAT_ORDER)if(by[k])b+=`<p class="day">${esc(k)}</p><div class="tiles">${by[k].sort((a,c)=>a.titel.localeCompare(c.titel,'de')).map(e=>`<button class="tile" data-buy="${esc(e.id)}">${esc(e.titel)}${e.menge?`<small>${esc(e.menge)}</small>`:''}</button>`).join('')}</div>`;
+      if(xs.length&&w)b+='<p class="meta">Antippen = gekauft. Lange drücken = bearbeiten.</p>';
+      if(xs.length&&w&&USERS.filter(u=>u.id!==meId&&!u.profil).length)b+=`<div class="row" style="padding:4px 0 8px"><button class="btn sm" data-a="shopgo">Ich gehe jetzt einkaufen</button><span class="meta">Die anderen bekommen einen Hinweis und können noch etwas ergänzen.</span></div>`;
+      const seen=new Set(xs.map(e=>e.titel.toLowerCase()));const recent=[];
+      for(const e of E.filter(e=>e.kind==='einkauf'&&e.done&&inList(e)).sort((a,c)=>String(c.doneAt||c.at||'').localeCompare(String(a.doneAt||a.at||'')))){const k=e.titel.toLowerCase();if(seen.has(k))continue;seen.add(k);recent.push(e);if(recent.length>=24)break}
+      if(recent.length&&w)b+=`<details${dk('recent')}><summary>Zuletzt gekauft</summary><div class="chips">${recent.map(e=>`<button class="chip" data-again="${esc(e.id)}">+ ${esc(e.titel)}</button>`).join('')}</div></details>`;
+    }
+    if(cur&&w)b+=`<div class="row" style="padding-bottom:8px"><button class="link" data-a="listedit">Liste umbenennen oder löschen</button></div>`;
+    h+=card(cur?cur.name:'Einkaufsliste',b);
   }
-  if(canSee('essen'))h+=vEssenCard();
+  if(canSee('essen')&&!curList)h+=vEssenCard();
   return h;
+}
+function openList(l){
+  l=l||{};sheet(`<h2>${l.id?'Liste bearbeiten':'Neue Liste'}<button class="x" data-close aria-label="Schließen">×</button></h2><form id="listf" data-l="${esc(l.id||'')}"><label class="f">Name<input name="name" value="${esc(l.name||'')}" placeholder="z. B. Drogerie, Baumarkt, Packliste Urlaub" required></label><label class="f">Art<select name="typ">${opts([['einkauf','Einkaufsliste: Gekauftes verschwindet'],['liste','Checkliste: Haken bleiben (Packliste, Geschenkideen)']],l.typ||'einkauf')}</select></label><div class="row"><button class="btn main" type="submit">Speichern</button>${l.id?'<button class="btn warn" type="button" data-a="listdel">Liste löschen</button>':''}</div></form>`);
 }
 function vEssenCard(){
   const w=canWrite('essen');let b='';
@@ -580,13 +598,14 @@ function pushBox(){
 function vMehr(){
   const p=ME.prefs||{};
   let h=`<button class="link back" data-go="heute">‹ Heute</button>`;
-  h+=card('Mitteilungen',pushBox()+`<form id="prefs"><div class="two"><label class="f">Morgen-Übersicht Mo–Fr<input type="time" name="morgenWerktag" value="${esc(p.morgenWerktag||'06:30')}"></label><label class="f">Sa und So<input type="time" name="morgenWochenende" value="${esc(p.morgenWochenende||'09:00')}"></label></div><div class="two"><label class="f">Ruhezeit ab<input type="time" name="ruheVon" value="${esc(p.ruheVon||'22:00')}"></label><label class="f">bis<input type="time" name="ruheBis" value="${esc(p.ruheBis||'06:30')}"></label></div><p class="meta" style="margin:0 0 10px">In der Ruhezeit schweigen Pinnwand, Vorschläge und neue Aufgaben. Termine und Aufgaben mit Uhrzeit melden sich trotzdem.</p><button class="btn sm main" type="submit">Zeiten speichern</button></form><div style="height:10px"></div>`);
+  h+=card('Mitteilungen',pushBox()+`<form id="prefs"><div class="two"><label class="f">Morgen-Übersicht Mo–Fr<input type="time" name="morgenWerktag" value="${esc(p.morgenWerktag||'06:30')}"></label><label class="f">Sa und So<input type="time" name="morgenWochenende" value="${esc(p.morgenWochenende||'09:00')}"></label></div><div class="two"><label class="f">Ruhezeit ab<input type="time" name="ruheVon" value="${esc(p.ruheVon||'22:00')}"></label><label class="f">bis<input type="time" name="ruheBis" value="${esc(p.ruheBis||'06:30')}"></label></div><p class="meta" style="margin:0 0 10px">In der Ruhezeit schweigen Pinnwand, Vorschläge und neue Aufgaben. Termine und Aufgaben mit Uhrzeit melden sich trotzdem.</p><div class="two"><label class="f">Wochenvorschau sonntags<input type="time" name="woche" value="${esc(p.woche&&p.woche!=='aus'?p.woche:'18:00')}"${p.woche==='aus'?' disabled':''}></label><label class="f" style="align-self:end;display:flex;gap:8px;align-items:center;min-height:44px"><input type="checkbox" name="wocheAus"${p.woche==='aus'?' checked':''} data-a="wocheaus">aus</label></div><button class="btn sm main" type="submit">Zeiten speichern</button></form><div style="height:10px"></div>`);
   if(canSee('pinnwand'))h+=card('Familien-Infos',`<p class="meta" style="margin-top:6px">Notfallnummern, Ärzte, Schule, Größen: alles, was man selten, aber dann schnell braucht.</p><div class="row" style="margin-bottom:10px"><button class="btn sm" data-go="infos">Öffnen (${I.length})</button></div>`);
   if(ME.role!=='tablet'&&AREAS.some(([k])=>canWrite(k)))h+=card('Kurzbefehl: Aktionstaste und Siri',`<p class="meta" style="margin-top:6px">Damit sprichst du einen Satz ein, ohne die App zu öffnen: Aktionstaste drücken oder „Hey Siri, merk dir“ sagen.</p>${quickLink?`<input class="field" readonly value="${esc(quickLink)}" aria-label="Dein persönlicher Link" style="font-size:13px;margin:6px 0"><div class="row" style="margin-bottom:8px"><button class="btn sm" data-a="qcopy">Link kopieren</button><button class="btn sm warn" data-a="qoff">Link ungültig machen</button></div><p class="meta">Den Link nur in deinen eigenen Kurzbefehl einfügen, nicht weitergeben. Wer ihn hat, kann in deinem Namen Einträge anlegen, aber nichts lesen.</p>`:`<div class="row" style="margin:6px 0 8px"><button class="btn sm main" data-a="qnew">${quickExists?'Neuen Link erzeugen':'Persönlichen Link erzeugen'}</button></div>${quickExists?'<p class="meta">Du hast schon einen Link. Ein neuer macht den alten ungültig.</p>':''}`}<details${dk('qhelp')}><summary>So richtest du den Kurzbefehl ein</summary><ol class="meta" style="padding-left:20px;margin:0 0 10px"><li>Hast du von einem Familienmitglied einen Kurzbefehl-Link bekommen: öffnen, „Kurzbefehl hinzufügen“, deinen Link von oben einfügen. Fertig.</li><li>Sonst selbst bauen: App „Kurzbefehle“ › „+“ › Name „Merk dir“.</li><li>Aktion „Text diktieren“ (Sprache Deutsch).</li><li>Aktion „Inhalte von URL abrufen“: als URL deinen Link einfügen, Methode „POST“, Anforderungstext „Datei“, als Datei „Diktierter Text“.</li><li>Aktion „Ergebnis anzeigen“ mit „Inhalte von URL“.</li><li>Aktionstaste: iPhone-Einstellungen › Aktionstaste › Kurzbefehl › „Merk dir“.</li><li>Zum Teilen mit der Familie: im Kurzbefehl auf Teilen › „iCloud-Link kopieren“ und vorher bei „Einrichtung“ die URL als Importfrage markieren.</li></ol></details>`);
   const myc=colorOf(meId);
   h+=card('Meine Farbe',`<div class="swatches">${COLORS.map(c=>`<button class="sw" data-a="mycolor" data-c="${c}" style="background:${c}" aria-label="Farbe wählen" aria-pressed="${c===myc}"></button>`).join('')}</div>`);
   if(isAdmin())h+=vFamilie();
-  h+=card('Konto',`<p class="empty">Angemeldet als ${esc(meName)}</p><div class="row" style="margin-bottom:12px"><button class="btn sm" data-a="pw">Passwort ändern</button><button class="btn sm" data-a="logout">Abmelden</button></div>`);
+  const fid=window.PublicKeyCredential?(fidCount?`<p class="meta">Face ID ist eingerichtet. Beim nächsten Anmelden einfach „Mit Face ID anmelden“ tippen.</p><div class="row" style="margin-bottom:10px"><button class="btn sm" data-a="fidadd">Für dieses Gerät hinzufügen</button><button class="btn sm warn" data-a="fiddel">Face ID entfernen</button></div>`:`<p class="meta">Mit Face ID meldest du dich ohne Passwort an. Es wird kein Gesichtsbild übertragen, nur ein Schlüssel, der auf deinem Gerät bleibt.</p><div class="row" style="margin-bottom:10px"><button class="btn sm main" data-a="fidadd">Face ID einrichten</button></div>`):'';
+  h+=card('Konto',`<p class="empty">Angemeldet als ${esc(meName)}</p>${fid}<div class="row" style="margin-bottom:12px"><button class="btn sm" data-a="pw">Passwort ändern</button><button class="btn sm" data-a="logout">Abmelden</button></div>`);
   return h;
 }
 function vFamilie(){
@@ -704,6 +723,7 @@ function openItem(key){
     f+=`<div class="two"><label class="f">Datum<input type="date" name="d" value="${esc(d)}"${dis}></label><label class="f">Uhrzeit (leer = ganztags)<input type="time" name="z" value="${esc(z)}"${dis}></label></div><div class="two"><label class="f">Wiederholen<select name="wdh"${dis}>${opts(WDH,e.wdh||'')}</select></label><label class="f">bis (optional)<input type="date" name="wdhBis" value="${esc(e.wdhBis||'')}"${dis}></label></div>${occ&&w&&e.wdh?`<p class="meta" style="margin:0 0 10px">Geöffnet am ${esc(fmtLong(occ))}. <button class="link" type="button" data-a="skip" data-occ="${esc(occ)}" style="min-height:0;padding:0">Nur diesen Termin absagen</button></p>`:''}<label class="f">Erinnerung<select name="erinnerung"${dis}>${opts(REMIND,e.erinnerung===undefined||e.erinnerung===''?'60':e.erinnerung)}</select></label><div class="two"><label class="f">Für<select name="fuer"${dis}>${fuerOpts(fuerKey(e))}</select></label><label class="f">Sichtbar<select name="sicht"${dis}>${sichtOpts(e.sicht)}</select></label></div>`}
   if(e.kind==='aufgabe')f+=`<div class="two"><label class="f">Fällig am<input type="date" name="faellig" value="${esc(e.faellig||'')}"${dis}></label><label class="f">Uhrzeit (dann klingelt es)<input type="time" name="zeit" value="${esc(e.zeit||'')}"${dis}></label></div><div class="two"><label class="f">Für<select name="fuer"${dis}>${fuerOpts(fuerKey(e))}</select></label><label class="f">Sichtbar<select name="sicht"${dis}>${sichtOpts(e.sicht)}</select></label></div>`;
   if(e.kind==='gedanke'){const names=[...new Set(T.map(t=>t.name).concat(e.thema?[e.thema]:[]))];f+=`<label class="f">Thema<input name="thema" list="themes" value="${esc(e.thema||'')}"${dis}><datalist id="themes">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist></label>`}
+  if(e.kind==='einkauf'&&Ls.length)f+=`<label class="f">Liste<select name="liste"${dis}>${opts([['','Einkauf']].concat(Ls.map(l=>[l.id,l.name])),listOf(e.liste||'')?e.liste:'')}</select></label>`;
   if(e.kind==='einkauf')f+=`<div class="two"><label class="f">Menge<input name="menge" value="${esc(e.menge||'')}" placeholder="z. B. 2 Liter"${dis}></label><label class="f">Abteilung<select name="kat"${dis}>${opts(KAT_ORDER.map(x=>[x,x]),e.kat||katOf(e.titel))}</select></label></div>`;
   f+=`<label class="f">Notiz<input name="text" value="${esc(e.text&&e.text!==e.titel?e.text:'')}"${dis}></label>`;
   const meta=[e.by?'Notiert von '+who(e.by):'',e.kind==='termin'&&!e.vorschlag&&CAL&&e.sicht!=='privat'?(e.kalender&&!e.calErr?'steht im iPhone-Kalender':e.calErr?'Kalender-Fehler, wird erneut versucht':'wird in den Kalender eingetragen'):''].filter(Boolean).join(' · ');
@@ -721,6 +741,8 @@ $('#sheetRoot').addEventListener('submit',async ev=>{
     await upd('themen',t.id,{name,due:isDate(fd.due)?fd.due:t.due,sicht:fd.sicht});
     for(const e of themeEntries(t.name))if(e.by===meId||isAdult())await upd('eintraege',e.id,{thema:name,sicht:fd.sicht});
     toast('Gespeichert.');return}
+  if(fm0.id==='listf'){ev.preventDefault();const fd=Object.fromEntries(new FormData(fm0));const name=String(fd.name||'').trim().slice(0,40);if(!name)return;const id=fm0.dataset.l||('l-'+uid().slice(2));closeSheet();
+    if(fm0.dataset.l)await upd('listen',id,{name,typ:fd.typ==='liste'?'liste':'einkauf'});else{await put('listen',id,{name,typ:fd.typ==='liste'?'liste':'einkauf',at:new Date().toISOString()});curList=id;LS.set('fa-list',id)}render();return}
   if(fm0.id==='infof'){ev.preventDefault();return saveInfo(fm0)}
   if(fm0.id==='cmtf'){ev.preventDefault();return addComment(fm0)}
   if(ev.target.id!=='ed')return;ev.preventDefault();const fm=ev.target;const fd=Object.fromEntries(new FormData(fm));
@@ -730,7 +752,7 @@ $('#sheetRoot').addEventListener('submit',async ev=>{
     const ch={titel:String(fd.titel||e.titel).trim().slice(0,120)||e.titel,text:String(fd.text||'').trim().slice(0,1000)||String(fd.titel||e.titel)};
     if(e.kind==='termin'){if(!isDate(fd.d)){toast('Bitte ein Datum wählen.');return}Object.assign(ch,{start:isTime(fd.z)?fd.d+'T'+fd.z:fd.d,ganztags:!isTime(fd.z),erinnerung:fd.erinnerung==='aus'?'aus':Number(fd.erinnerung),fuer:fd.fuer,sicht:fd.sicht,wdh:WDHL[fd.wdh]?fd.wdh:'',wdhBis:WDHL[fd.wdh]&&isDate(fd.wdhBis)?fd.wdhBis:''});if(ch.start!==e.start)ch.ende=''}
     if(e.kind==='aufgabe')Object.assign(ch,{faellig:isDate(fd.faellig)?fd.faellig:'',zeit:isDate(fd.faellig)&&isTime(fd.zeit)?fd.zeit:'',fuer:fd.fuer,sicht:fd.sicht});
-    if(e.kind==='einkauf')Object.assign(ch,{menge:String(fd.menge||'').trim().slice(0,40),kat:KAT_ORDER.includes(fd.kat)?fd.kat:''});
+    if(e.kind==='einkauf')Object.assign(ch,{menge:String(fd.menge||'').trim().slice(0,40),kat:KAT_ORDER.includes(fd.kat)?fd.kat:''},'liste'in fd?{liste:listOf(fd.liste)?fd.liste:''}:{});
     if(e.kind==='gedanke'){const name=String(fd.thema||'').trim().slice(0,60)||'Allgemein';ch.thema=await ensureTheme(name,e.sicht)}
     closeSheet();await upd('eintraege',e.id,ch);toast('Gespeichert.');
   }catch(err){toast(err.message||'Speichern hat nicht geklappt.')}
@@ -763,6 +785,7 @@ $('#sheetRoot').addEventListener('change',async ev=>{
 $('#sheetRoot').addEventListener('click',async ev=>{
   const b=ev.target.closest('button[data-a]');if(!b)return;const fm=b.closest('form');
   if(b.dataset.a==='tl'){const id=b.closest('[data-t]').dataset.t;const n=b.dataset.n;const d=n==='m1'?addMonths(today(),1):n==='m3'?addMonths(today(),3):addDays(today(),7);closeSheet();await upd('themen',id,{due:d,done:false});toast('Meldet sich am '+fmtDay(d)+'.');return}
+  if(b.dataset.a==='listdel'){const id=fm.dataset.l;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Wirklich? Alle Einträge darin auch';return}closeSheet();for(const e of E.filter(e=>e.kind==='einkauf'&&e.liste===id))await del('eintraege',e.id);await del('listen',id);curList='';LS.set('fa-list','');render();return}
   if(b.dataset.a==='infodel'){const id=fm.dataset.i;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Wirklich löschen?';return}closeSheet();await del('infos',id);return}
   if(b.dataset.a==='startcap'){closeSheet();LS.set('fa-intro-'+meId,1);openCapture();return}
   if(b.dataset.a==='introdone'){closeSheet();LS.set('fa-intro-'+meId,1);return}
@@ -803,10 +826,10 @@ async function addZutaten(d){
 }
 async function addBuy(raw){
   const parts=String(raw).split(/,|;|\n| und /).map(s=>s.trim()).filter(Boolean).slice(0,20);const at=new Date().toISOString();const added=[];
-  for(const p of parts){const titel=p.slice(0,80);const ex=E.find(e=>e.kind==='einkauf'&&e.titel.toLowerCase()===titel.toLowerCase());
+  for(const p of parts){const titel=p.slice(0,80);const ex=E.find(e=>e.kind==='einkauf'&&inList(e)&&e.titel.toLowerCase()===titel.toLowerCase());
     if(ex&&!ex.done)continue;
     if(ex){await upd('eintraege',ex.id,{done:false,at:at,by:ex.by});added.push(ex.titel);continue}
-    await put('eintraege',uid(),{kind:'einkauf',titel:titel,text:titel,by:meId,at:at,done:false,kat:katOf(titel)});added.push(titel)}
+    await put('eintraege',uid(),Object.assign({kind:'einkauf',titel:titel,text:titel,by:meId,at:at,done:false,kat:katOf(titel)},curList?{liste:curList}:{}));added.push(titel)}
   return added;
 }
 
@@ -816,7 +839,7 @@ $('#bar').addEventListener('click',ev=>{const b=ev.target.closest('.tab');if(b)g
 $('#counts').addEventListener('click',ev=>{const b=ev.target.closest('[data-go]');if(b)go(b.dataset.go)});
 $('#find').addEventListener('click',()=>{go('suche');setTimeout(()=>{const i=$('#sq');if(i)i.focus()},50)});
 let rsT=null;window.addEventListener('resize',()=>{clearTimeout(rsT);rsT=setTimeout(render,200)});
-$('#gear').addEventListener('click',async()=>{go('mehr');try{quickExists=(await api('/api/token')).exists;render()}catch(e){}});
+$('#gear').addEventListener('click',async()=>{go('mehr');try{quickExists=(await api('/api/token')).exists;if(window.PublicKeyCredential)fidCount=(await api('/api/passkey')).count;render()}catch(e){}});
 $('#fab').addEventListener('click',openCapture);
 let pressT=null,pressed=false;
 $('#p').addEventListener('pointerdown',ev=>{const t=ev.target.closest('[data-buy]');if(!t)return;pressed=false;clearTimeout(pressT);pressT=setTimeout(()=>{pressed=true;openItem('e:'+t.dataset.buy)},550)});
@@ -836,6 +859,13 @@ $('#p').addEventListener('click',async ev=>{
   const tEl=btn.closest('[data-t]'),eEl=btn.closest('[data-e]'),dEl=btn.closest('[data-d]'),uEl=btn.closest('[data-u]');
   try{
     if(a==='pushon')return enablePush();
+    if(a==='list'){curList=btn.dataset.l;LS.set('fa-list',curList);render();return}
+    if(a==='listadd'){openList();return}
+    if(a==='listedit'){openList(listOf(curList));return}
+    if(a==='listreset'){for(const e of E.filter(e=>e.kind==='einkauf'&&inList(e)&&e.done))await upd('eintraege',e.id,{done:false});return}
+    if(a==='shopgo'){const r=await api('/api/einkaufen',{liste:curList});toast(r.again?'Die anderen wissen schon Bescheid.':r.sent?'Die anderen haben einen Hinweis bekommen.':'Niemand sonst hat Mitteilungen an.');return}
+    if(a==='fidadd'){return addPasskey()}
+    if(a==='fiddel'){await api('/api/passkey',null,'DELETE');fidCount=0;render();toast('Face ID ist für die App entfernt.');return}
     if(a==='calmode'){calMode=btn.dataset.m;LS.set('fa-cal',calMode);if(calMode!=='liste'&&!calAnchor)calAnchor=t0();render();return}
     if(a==='calprev'||a==='calnext'){const st=calMode==='woche'?7:1;calAnchor=addDays(calAnchor||t0(),a==='calprev'?-st:st);render();return}
     if(a==='caltoday'){calAnchor=t0();render();return}
@@ -895,6 +925,7 @@ $('#p').addEventListener('click',async ev=>{
 $('#p').addEventListener('change',async ev=>{
   const el=ev.target;const a=el.dataset.a;
   try{
+    if(a==='wocheaus'){const t=el.closest('form').querySelector('[name=woche]');t.disabled=el.checked;return}
     if(el.dataset.k==='role'){const box=el.closest('[data-u],#newu');const pr=PRESETS[el.value]||PRESETS.erwachsener;box.querySelectorAll('select[data-area]').forEach(x=>{x.value=pr[x.dataset.area]});const pa=box.querySelector('[data-k=permwrap]');if(pa)pa.hidden=el.value==='admin';return}
     if(a==='restorefile'&&el.files&&el.files[0]){let data;try{data=JSON.parse(await el.files[0].text())}catch(e){toast('Die Datei ist keine Sicherung der Family App.');return}if(!confirmRestore())return;const r=await api('/api/admin/restore',{data});toast(r.restored+' Einträge wiederhergestellt.');await pull(true);return}
     if(a==='tick'){const id=el.closest('[data-e]').dataset.e;const e=E.find(x=>x.id===id);if(!e)return;
@@ -916,7 +947,7 @@ $('#p').addEventListener('submit',async ev=>{
   if(ev.target.id==='addBuy'){const i=$('#buyIn');const v=i.value.trim();if(!v)return;i.value='';const added=await addBuy(v);if(!added.length)toast('Steht schon auf der Liste.');render();return}
   if(ev.target.id==='famname'){const n=new FormData(ev.target).get('name');try{await api('/api/admin/family',{name:n});FAMILY=String(n||'').trim();renderHead();toast('Gespeichert.')}catch(e){toast(e.message)}return}
   if(ev.target.id==='credf'){const fd=Object.fromEntries(new FormData(ev.target));const b=ev.target.querySelector('[type=submit]');b.disabled=true;b.textContent='Prüfe bei Apple …';try{await api('/api/admin/calcred',fd);credInfo=await api('/api/admin/calcred');openD.delete('cred');toast('iCloud-Zugang gespeichert. Jetzt den Kalender wählen.');render()}catch(e){toast(e.message);b.disabled=false;b.textContent='Prüfen und speichern'}return}
-  if(ev.target.id==='prefs'){const fd=Object.fromEntries(new FormData(ev.target));try{const r=await api('/api/prefs',fd);ME.prefs=r.prefs;toast('Zeiten gespeichert.')}catch(e){toast(e.message)}return}
+  if(ev.target.id==='prefs'){const fd=Object.fromEntries(new FormData(ev.target));if(fd.wocheAus)fd.woche='aus';delete fd.wocheAus;try{const r=await api('/api/prefs',fd);ME.prefs=r.prefs;toast('Zeiten gespeichert.')}catch(e){toast(e.message)}return}
 });
 
 /* ---------- Familie (Admin) ---------- */
@@ -939,11 +970,28 @@ async function enablePush(){
   }catch(e){toast('Mitteilungen konnten nicht eingeschaltet werden: '+e.message)}
 }
 
+/* ---------- Face ID (Passkey) ---------- */
+const b2u=buf=>{let s='';new Uint8Array(buf).forEach(c=>s+=String.fromCharCode(c));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
+const u2b=x=>{x=String(x).replace(/-/g,'+').replace(/_/g,'/');while(x.length%4)x+='=';return Uint8Array.from(atob(x),c=>c.charCodeAt(0))};
+async function addPasskey(){
+  try{
+    const o=await api('/api/passkey/options');
+    const cred=await navigator.credentials.create({publicKey:{challenge:u2b(o.challenge),rp:o.rp,user:{id:u2b(o.user.id),name:o.user.name,displayName:o.user.displayName},pubKeyCredParams:o.pubKeyCredParams,authenticatorSelection:o.authenticatorSelection,timeout:o.timeout,attestation:'none',excludeCredentials:o.excludeCredentials.map(c=>({type:'public-key',id:u2b(c.id)}))}});
+    await api('/api/passkey/register',{id:cred.id,clientDataJSON:b2u(cred.response.clientDataJSON),attestationObject:b2u(cred.response.attestationObject)});
+    fidCount++;render();toast('Face ID ist eingerichtet.');
+  }catch(e){if(e&&e.name==='NotAllowedError')return;toast(e.message||'Face ID konnte nicht eingerichtet werden.')}
+}
+async function loginPasskey(){
+  const o=await api('/api/passkey/login-options');
+  const c=await navigator.credentials.get({publicKey:{challenge:u2b(o.challenge),rpId:o.rpId,userVerification:'required',timeout:o.timeout}});
+  await api('/api/passkey/login',{id:c.id,clientDataJSON:b2u(c.response.clientDataJSON),authenticatorData:b2u(c.response.authenticatorData),signature:b2u(c.response.signature)});
+}
+
 /* ---------- Anmeldung ---------- */
 function showAuth(mode,data){
   ['#p','#top','#bar','#fab'].forEach(s=>$(s).hidden=true);const a=$('#auth');a.hidden=false;
   const forms={
-    login:`<form id="af"><h2 style="margin:0">Anmelden</h2><label>Name<input class="field" name="name" autocomplete="username" autocapitalize="words" required></label><label>Passwort<input class="field" type="password" name="password" autocomplete="current-password" required></label><p class="err" id="aerr"></p><button class="btn main" type="submit">Anmelden</button><p class="meta">Noch kein Zugang? Den Einladungslink bekommst du vom Admin der Familie.</p></form>`,
+    login:`<form id="af"><h2 style="margin:0">Anmelden</h2><label>Name<input class="field" name="name" autocomplete="username" autocapitalize="words" required></label><label>Passwort<input class="field" type="password" name="password" autocomplete="current-password" required></label><p class="err" id="aerr"></p><button class="btn main" type="submit">Anmelden</button>${window.PublicKeyCredential?'<button class="btn" type="button" id="fidlogin">Mit Face ID anmelden</button>':''}<p class="meta">Noch kein Zugang? Den Einladungslink bekommst du vom Admin der Familie.</p></form>`,
     setup:`<form id="af"><h2 style="margin:0">Family App einrichten</h2><p class="meta">Du wirst der erste Admin. Den Einrichtungs-Code hast du bei Cloudflare als SETUP_CODE hinterlegt.</p><label>Einrichtungs-Code<input class="field" name="code" autocomplete="off" required></label><label>Dein Name<input class="field" name="name" autocomplete="username" required></label><label>Passwort (mindestens 8 Zeichen)<input class="field" type="password" name="password" autocomplete="new-password" minlength="8" required></label><p class="err" id="aerr"></p><button class="btn main" type="submit">Einrichten</button></form>`,
     invite:`<form id="af"><h2 style="margin:0">Willkommen, ${esc(data&&data.name)}</h2><p class="meta">Leg dein Passwort fest. Das iPhone bietet an, es zu sichern, danach meldest du dich per Face ID an.</p><input type="text" name="username" autocomplete="username" value="${esc(data&&data.name)}" hidden><label>Neues Passwort (mindestens 8 Zeichen)<input class="field" type="password" name="password" autocomplete="new-password" minlength="8" required></label><p class="err" id="aerr"></p><button class="btn main" type="submit">Passwort festlegen</button></form>`,
     password:`<form id="af"><h2 style="margin:0">Passwort ändern</h2><input type="text" name="username" autocomplete="username" value="${esc(meName)}" hidden><label>Bisheriges Passwort<input class="field" type="password" name="old" autocomplete="current-password" required></label><label>Neues Passwort (mindestens 8 Zeichen)<input class="field" type="password" name="password" autocomplete="new-password" minlength="8" required></label><p class="err" id="aerr"></p><div class="row"><button class="btn main" type="submit">Ändern</button><button class="btn" type="button" id="acancel">Abbrechen</button></div></form>`
@@ -951,6 +999,7 @@ function showAuth(mode,data){
   a.innerHTML=forms[mode];
   const back=()=>{a.hidden=true;['#p','#top','#bar'].forEach(s=>$(s).hidden=false);$('#fab').hidden=!AREAS.some(([k])=>canWrite(k))};
   const c=$('#acancel');if(c)c.onclick=back;
+  const fl=$('#fidlogin');if(fl)fl.onclick=async()=>{const err=$('#aerr');err.textContent='';try{await loginPasskey();location.href='/'}catch(e){if(e&&e.name==='NotAllowedError')return;err.textContent=e.message||'Face ID hat nicht geklappt. Bitte mit Passwort anmelden.'}};
   $('#af').addEventListener('submit',async ev=>{
     ev.preventDefault();const fd=Object.fromEntries(new FormData(ev.target));const err=$('#aerr');err.textContent='';
     const btn=ev.target.querySelector('[type=submit]');btn.disabled=true;
@@ -979,6 +1028,8 @@ async function start(offline){
   col('serien').onSnapshot(r=>{S=rows(r).filter(s=>s.titel);render()});
   col('essen').onSnapshot(r=>{F=rows(r).filter(f=>f.datum);render()});
   col('infos').onSnapshot(r=>{I=rows(r).filter(x=>x.titel);render()});
+  col('listen').onSnapshot(r=>{Ls=rows(r).filter(x=>x.name);render()});
+  curList=LS.get('fa-list','');
   const cached=loadCache();
   if(cached)Object.keys(store).forEach(emit);
   await pull(!cached);

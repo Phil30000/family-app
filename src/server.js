@@ -11,8 +11,8 @@ const SEED = __SEED__;
 
 const AREAS = ['termine', 'aufgaben', 'einkauf', 'essen', 'themen', 'pinnwand'];
 const KIND_AREA = { termin: 'termine', aufgabe: 'aufgaben', einkauf: 'einkauf', gedanke: 'themen', eingang: 'themen', nachricht: 'pinnwand' };
-const COLL_AREA = { themen: 'themen', serien: 'aufgaben', essen: 'essen', infos: 'pinnwand' };
-const COLLS = ['eintraege', 'themen', 'serien', 'essen', 'infos'];
+const COLL_AREA = { themen: 'themen', serien: 'aufgaben', essen: 'essen', infos: 'pinnwand', listen: 'einkauf' };
+const COLLS = ['eintraege', 'themen', 'serien', 'essen', 'infos', 'listen'];
 const ROLES = ['admin', 'erwachsener', 'kind', 'gast', 'tablet'];
 const LEVELS = ['off', 'mine', 'view', 'edit'];
 const PRESETS = {
@@ -86,6 +86,18 @@ async function init(env) {
     try { await env.DB.prepare('ALTER TABLE users ADD COLUMN ' + col).run(); } catch (e) { /* gibt es schon */ }
   }
   await env.DB.prepare('CREATE TABLE IF NOT EXISTS backups(id INTEGER PRIMARY KEY AUTOINCREMENT,created INTEGER NOT NULL,data TEXT NOT NULL)').run();
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS passkeys(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,jwk TEXT NOT NULL,counter INTEGER NOT NULL DEFAULT 0,created TEXT)').run();
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS challenges(c TEXT PRIMARY KEY,user_id TEXT,created INTEGER NOT NULL)').run();
+  let added = false;
+  for (const col of ["kind TEXT NOT NULL DEFAULT ''", "due TEXT NOT NULL DEFAULT ''", 'rec INTEGER NOT NULL DEFAULT 0', 'done INTEGER NOT NULL DEFAULT 0']) {
+    try { await env.DB.prepare('ALTER TABLE docs ADD COLUMN ' + col).run(); added = true; } catch (e) { /* gibt es schon */ }
+  }
+  await env.DB.prepare('CREATE INDEX IF NOT EXISTS docs_due ON docs(coll,kind,due)').run();
+  if (added || !(await getSetting(env, 'schema3'))) {
+    const { results } = await env.DB.prepare('SELECT coll,id,data FROM docs WHERE deleted=0').all();
+    for (let i = 0; i < results.length; i += 50) await env.DB.batch(results.slice(i, i + 50).map((r) => env.DB.prepare('UPDATE docs SET kind=?,due=?,rec=?,done=? WHERE coll=? AND id=?').bind(...cols(JSON.parse(r.data)), r.coll, r.id)));
+    await setSetting(env, 'schema3', 1);
+  }
   const { results: cu } = await env.DB.prepare('SELECT id,color FROM users ORDER BY created,rowid').all();
   const taken = new Set(cu.map((u) => u.color).filter(Boolean));
   for (const u of cu) {
@@ -114,9 +126,15 @@ async function getDoc(env, coll, id) {
   if (!r) return null;
   return { data: r.data ? JSON.parse(r.data) : null, deleted: !!r.deleted };
 }
+// Suchspalten: Art, Datum (Termin-Start bzw. Fälligkeit), Serie, erledigt
+const cols = (data) => {
+  const d = data || {};
+  const due = d.kind === 'termin' ? String(d.start || '').slice(0, 10) : d.kind === 'aufgabe' ? String(d.faellig || '') : '';
+  return [String(d.kind || ''), due, d.wdh ? 1 : 0, d.done ? 1 : 0];
+};
 async function putDoc(env, coll, id, data) {
-  await env.DB.prepare('INSERT INTO docs(coll,id,data,updated,deleted) VALUES(?,?,?,?,0) ON CONFLICT(coll,id) DO UPDATE SET data=excluded.data,updated=excluded.updated,deleted=0')
-    .bind(coll, id, JSON.stringify(data), stamp())
+  await env.DB.prepare('INSERT INTO docs(coll,id,data,updated,deleted,kind,due,rec,done) VALUES(?,?,?,?,0,?,?,?,?) ON CONFLICT(coll,id) DO UPDATE SET data=excluded.data,updated=excluded.updated,deleted=0,kind=excluded.kind,due=excluded.due,rec=excluded.rec,done=excluded.done')
+    .bind(coll, id, JSON.stringify(data), stamp(), ...cols(data))
     .run();
 }
 async function deleteDoc(env, coll, id) {
@@ -125,6 +143,54 @@ async function deleteDoc(env, coll, id) {
 async function allDocs(env, coll) {
   const { results } = await env.DB.prepare('SELECT id,data FROM docs WHERE coll=? AND deleted=0').bind(coll).all();
   return results.map((r) => ({ id: r.id, data: JSON.parse(r.data) }));
+}
+
+/* ---------------- Face ID (Passkeys / WebAuthn) ---------------- */
+function cbor(buf) {
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let i = 0;
+  const len = (ai) => {
+    if (ai < 24) return ai;
+    if (ai === 24) return b[i++];
+    if (ai === 25) { const v = (b[i] << 8) | b[i + 1]; i += 2; return v; }
+    if (ai === 26) { const v = ((b[i] << 24) >>> 0) + (b[i + 1] << 16) + (b[i + 2] << 8) + b[i + 3]; i += 4; return v; }
+    throw new Error('CBOR');
+  };
+  const item = () => {
+    const ib = b[i++], mt = ib >> 5, ai = ib & 31;
+    if (mt === 0) return len(ai);
+    if (mt === 1) return -1 - len(ai);
+    if (mt === 2) { const n = len(ai); const v = b.slice(i, i + n); i += n; return v; }
+    if (mt === 3) { const n = len(ai); const v = new TextDecoder().decode(b.slice(i, i + n)); i += n; return v; }
+    if (mt === 4) { const n = len(ai); const a = []; for (let k = 0; k < n; k++) a.push(item()); return a; }
+    if (mt === 5) { const n = len(ai); const m = new Map(); for (let k = 0; k < n; k++) { const key = item(); m.set(key, item()); } return m; }
+    if (mt === 7) return ai === 20 ? false : ai === 21 ? true : null;
+    throw new Error('CBOR');
+  };
+  const v = item();
+  if (v instanceof Map) { const o = {}; for (const [k, x] of v) o[k] = x; o.__map = v; return o; }
+  return v;
+}
+function parseAuthData(a) {
+  const ad = a instanceof Uint8Array ? a : new Uint8Array(a);
+  const out = { rpIdHash: ad.slice(0, 32), flags: ad[32], counter: ((ad[33] << 24) >>> 0) + (ad[34] << 16) + (ad[35] << 8) + ad[36] };
+  if (out.flags & 64) {
+    const n = (ad[53] << 8) | ad[54];
+    const id = ad.slice(55, 55 + n);
+    const rest = ad.slice(55 + n);
+    const key = cbor(rest);
+    out.cred = { id, key: key.__map };
+  }
+  return out;
+}
+function derToRaw(der) {
+  const d = der instanceof Uint8Array ? der : new Uint8Array(der);
+  if (d.length === 64 || d[0] !== 0x30) return d;
+  let i = 2;
+  const part = () => { i++; const n = d[i++]; let v = d.slice(i, i + n); i += n; while (v.length > 32 && v[0] === 0) v = v.slice(1); const o = new Uint8Array(32); o.set(v, 32 - v.length); return o; };
+  const r = part(), s2 = part();
+  const raw = new Uint8Array(64); raw.set(r, 0); raw.set(s2, 32);
+  return raw;
 }
 
 /* ---------------- Nutzer & Rechte ---------------- */
@@ -138,13 +204,13 @@ function normPerms(role, raw) {
   AREAS.forEach((a) => (o[a] = role === 'admin' ? 'edit' : LEVELS.includes(p && p[a]) ? p[a] : base[a]));
   return o;
 }
-const PREF_DEF = { ruheVon: '22:00', ruheBis: '06:30', morgenWerktag: '06:30', morgenWochenende: '09:00' };
+const PREF_DEF = { ruheVon: '22:00', ruheBis: '06:30', morgenWerktag: '06:30', morgenWochenende: '09:00', woche: '18:00' };
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 function normPrefs(raw) {
   let p = raw;
   try { p = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { p = null; }
   const o = { ...PREF_DEF };
-  for (const k of Object.keys(PREF_DEF)) if (p && HHMM.test(String(p[k] || ''))) o[k] = p[k];
+  for (const k of Object.keys(PREF_DEF)) if (p && (HHMM.test(String(p[k] || '')) || (k === 'woche' && p[k] === 'aus'))) o[k] = p[k];
   return o;
 }
 const pub = (u) => { const role = normRole(u.role); return { id: u.id, name: u.name, role, perms: normPerms(role, u.areas), prefs: normPrefs(u.prefs), color: /^#[0-9a-f]{6}$/i.test(String(u.color || '')) ? u.color : '', profil: !!u.profil, active: !!u.active, invited: !u.profil && !!u.invite && !u.hash }; };
@@ -541,7 +607,9 @@ const recipients = (users, d) => {
 };
 async function reminders(env, from, to) {
   const users = await activeUsers(env);
-  const E = (await allDocs(env, 'eintraege')).map((x) => ({ id: x.id, ...x.data }));
+  const d0 = from.slice(0, 10), d1 = addDaysIso(to.slice(0, 10), 2);
+  const { results } = await env.DB.prepare("SELECT id,data FROM docs WHERE coll='eintraege' AND deleted=0 AND ((kind='termin' AND (rec=1 OR (due>=? AND due<=?))) OR (kind='aufgabe' AND done=0 AND due>=? AND due<=?))").bind(d0, d1, d0, to.slice(0, 10)).all();
+  const E = results.map((x) => ({ id: x.id, ...JSON.parse(x.data) }));
   let n = 0;
   for (const e of E) {
     let at = null, title = '', body = '';
@@ -569,6 +637,36 @@ async function reminders(env, from, to) {
     if (!(await once(env, 'r:' + e.id + ':' + at))) continue;
     await notify(env, recipients(users, e), title, body, true);
     n++;
+  }
+  return n;
+}
+async function weekPreview(env, u, t0 = berlin().date) {
+  const E = (await allDocs(env, 'eintraege')).map((x) => x.data).filter((d) => canRead(u, 'eintraege', d) && !d.vorschlag);
+  const days = [];
+  for (let i = 1; i <= 7; i++) {
+    const d = addDaysIso(t0, i);
+    let ter = can(u, 'termine') ? E.filter((e) => e.kind === 'termin' && onDay(e, d)).map((e) => ({ ...e, start: onDay(e, d) })) : [];
+    if (seesExternal(u)) { const c = await getSetting(env, 'calext'); if (c) ter = ter.concat(c.events.filter((x) => x.start.slice(0, 10) === d)); }
+    if (ter.length) days.push(WDN[new Date(d + 'T12:00:00Z').getUTCDay()].slice(0, 2) + ': ' + ter.sort((a, b) => String(a.start).localeCompare(String(b.start))).map((e) => (String(e.start).length > 10 ? String(e.start).slice(11, 16) + ' ' : '') + e.titel).join(', '));
+  }
+  const due = can(u, 'aufgaben') ? E.filter((e) => e.kind === 'aufgabe' && !e.done && e.faellig && e.faellig <= addDaysIso(t0, 7) && (String(e.fuer || 'wir') === 'wir' || e.fuer === u.id)).length : 0;
+  const lines = days.length ? days : ['Keine Termine in der kommenden Woche.'];
+  if (due) lines.push(due + (due === 1 ? ' Aufgabe ist' : ' Aufgaben sind') + ' bis nächsten Sonntag fällig.');
+  return lines.join('\n');
+}
+async function weekly(env, from, to) {
+  const users = await activeUsers(env);
+  let n = 0;
+  for (const u of users) {
+    if (u.prefs.woche === 'aus') continue;
+    for (const day of new Set([from.slice(0, 10), to.slice(0, 10)])) {
+      if (new Date(day + 'T12:00:00Z').getUTCDay() !== 0) continue;
+      const at = day + 'T' + u.prefs.woche;
+      if (!(at > from && at <= to)) continue;
+      if (!(await once(env, 'w:' + u.id + ':' + day))) continue;
+      await notify(env, [u], 'Deine Woche', await weekPreview(env, u, day), true);
+      n++;
+    }
   }
   return n;
 }
@@ -879,6 +977,39 @@ async function handleApi(req, env, ctx, url) {
     await env.DB.prepare('UPDATE users SET fails=0,lock_until=0 WHERE id=?').bind(u.id).run();
     return json({ ok: true }, 200, { 'set-cookie': sessionCookie(await newSession(env, u.id)) });
   }
+  if (p === '/api/passkey/login-options') {
+    const c = rid(32);
+    await env.DB.prepare('DELETE FROM challenges WHERE created<?').bind(Date.now() - 10 * 60000).run();
+    await env.DB.prepare('INSERT INTO challenges(c,user_id,created) VALUES(?,NULL,?)').bind(c, Date.now()).run();
+    return json({ challenge: c, rpId: url.hostname, userVerification: 'required', timeout: 120000 });
+  }
+  if (p === '/api/passkey/login' && req.method === 'POST') {
+    const fail = (m) => bad(m || 'Anmeldung mit Face ID hat nicht geklappt.', 401);
+    try {
+      const cdRaw = ub64u(String(body.clientDataJSON || ''));
+      const cd = JSON.parse(new TextDecoder().decode(cdRaw));
+      if (cd.type !== 'webauthn.get' || cd.origin !== url.origin) return fail();
+      const ch = await env.DB.prepare('SELECT * FROM challenges WHERE c=? AND user_id IS NULL').bind(cd.challenge).first();
+      if (!ch || ch.created < Date.now() - 5 * 60000) return fail('Anfrage abgelaufen. Bitte noch einmal.');
+      await env.DB.prepare('DELETE FROM challenges WHERE c=?').bind(cd.challenge).run();
+      const pk = await env.DB.prepare('SELECT * FROM passkeys WHERE id=?').bind(String(body.id || '')).first();
+      if (!pk) return fail('Diesen Face-ID-Schlüssel kennt die App nicht mehr. Bitte mit Passwort anmelden.');
+      const authData = ub64u(String(body.authenticatorData || ''));
+      const ad = parseAuthData(authData);
+      if (b64u(ad.rpIdHash) !== b64u(await crypto.subtle.digest('SHA-256', enc.encode(url.hostname)))) return fail();
+      if (!(ad.flags & 1) || !(ad.flags & 4)) return fail();
+      const key = await crypto.subtle.importKey('jwk', JSON.parse(pk.jwk), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+      const signed = new Uint8Array(authData.length + 32);
+      signed.set(authData, 0); signed.set(new Uint8Array(await crypto.subtle.digest('SHA-256', cdRaw)), authData.length);
+      const ok = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, derToRaw(ub64u(String(body.signature || ''))), signed);
+      if (!ok) return fail();
+      if (ad.counter && pk.counter && ad.counter <= pk.counter) return fail('Dieser Schlüssel wurde kopiert. Bitte mit Passwort anmelden.');
+      await env.DB.prepare('UPDATE passkeys SET counter=? WHERE id=?').bind(ad.counter, pk.id).run();
+      const u = await env.DB.prepare('SELECT * FROM users WHERE id=? AND active=1').bind(pk.user_id).first();
+      if (!u) return fail();
+      return json({ ok: true }, 200, { 'set-cookie': sessionCookie(await newSession(env, u.id)) });
+    } catch (e) { return fail(); }
+  }
   if (p === '/api/invite' && req.method === 'GET') {
     const u = await env.DB.prepare('SELECT name FROM users WHERE invite=? AND active=1').bind(await sha(url.searchParams.get('t') || '-')).first();
     return u ? json({ name: u.name }) : bad('Dieser Einladungslink ist nicht mehr gültig.', 404);
@@ -912,7 +1043,7 @@ async function handleApi(req, env, ctx, url) {
   if (p === '/api/prefs' && req.method === 'POST') {
     if (/^#[0-9a-f]{6}$/i.test(String(body.color || ''))) await env.DB.prepare('UPDATE users SET color=? WHERE id=?').bind(body.color, me.id).run();
     const np = { ...me.prefs };
-    for (const k of Object.keys(PREF_DEF)) if (HHMM.test(String(body[k] || ''))) np[k] = body[k];
+    for (const k of Object.keys(PREF_DEF)) if (HHMM.test(String(body[k] || '')) || (k === 'woche' && body[k] === 'aus')) np[k] = body[k];
     await env.DB.prepare('UPDATE users SET prefs=? WHERE id=?').bind(JSON.stringify(np), me.id).run();
     return json({ ok: true, prefs: np });
   }
@@ -963,6 +1094,48 @@ async function handleApi(req, env, ctx, url) {
     const text = String(body.text || '').trim().slice(0, 2000);
     if (!text) return bad('Bitte etwas eingeben.');
     return json(await capture(env, ctx, me, text));
+  }
+  if (p === '/api/einkaufen' && req.method === 'POST') {
+    if (!['edit', 'mine'].includes(lvl(me, 'einkauf'))) return bad('Dafür fehlt dir die Berechtigung.', 403);
+    const slot = Math.floor(Date.now() / (30 * 60000));
+    if (!(await once(env, 'shop:' + me.id + ':' + slot))) return json({ ok: true, sent: 0, again: true });
+    const open = (await allDocs(env, 'eintraege')).filter((x) => x.data.kind === 'einkauf' && !x.data.done && (!x.data.liste || x.data.liste === String(body.liste || ''))).length;
+    const to = (await activeUsers(env)).filter((u) => u.id !== me.id && !u.profil && can(u, 'einkauf'));
+    await notify(env, to, me.name + ' geht einkaufen', 'Fehlt noch etwas? Jetzt auf die Liste setzen. Aktuell ' + open + (open === 1 ? ' Artikel.' : ' Artikel.'), false);
+    return json({ ok: true, sent: to.length });
+  }
+  if (p === '/api/passkey/options') {
+    const c = rid(32);
+    await env.DB.prepare('INSERT INTO challenges(c,user_id,created) VALUES(?,?,?)').bind(c, me.id, Date.now()).run();
+    const { results } = await env.DB.prepare('SELECT id FROM passkeys WHERE user_id=?').bind(me.id).all();
+    return json({ challenge: c, rp: { name: 'Family App', id: url.hostname }, user: { id: b64u(enc.encode(me.id)), name: me.name, displayName: me.name }, pubKeyCredParams: [{ type: 'public-key', alg: -7 }], authenticatorSelection: { residentKey: 'required', userVerification: 'required' }, timeout: 120000, excludeCredentials: results.map((r) => ({ type: 'public-key', id: r.id })), attestation: 'none' });
+  }
+  if (p === '/api/passkey/register' && req.method === 'POST') {
+    try {
+      const cd = JSON.parse(new TextDecoder().decode(ub64u(String(body.clientDataJSON || ''))));
+      if (cd.type !== 'webauthn.create' || cd.origin !== url.origin) throw new Error('Herkunft passt nicht.');
+      const ch = await env.DB.prepare('SELECT * FROM challenges WHERE c=? AND user_id=?').bind(cd.challenge, me.id).first();
+      if (!ch || ch.created < Date.now() - 5 * 60000) throw new Error('Anfrage abgelaufen. Bitte noch einmal.');
+      await env.DB.prepare('DELETE FROM challenges WHERE c=?').bind(cd.challenge).run();
+      const att = cbor(ub64u(String(body.attestationObject || '')));
+      const ad = parseAuthData(att.authData);
+      if (!ad.cred) throw new Error('Kein Schlüssel erhalten.');
+      if (b64u(ad.rpIdHash) !== b64u(await crypto.subtle.digest('SHA-256', enc.encode(url.hostname)))) throw new Error('Falsche Adresse.');
+      if (!(ad.flags & 4)) throw new Error('Face ID oder Code wurde nicht bestätigt.');
+      const k = ad.cred.key;
+      if (k.get(1) !== 2 || k.get(3) !== -7 || k.get(-1) !== 1) throw new Error('Dieser Schlüsseltyp wird nicht unterstützt.');
+      const jwk = { kty: 'EC', crv: 'P-256', x: b64u(k.get(-2)), y: b64u(k.get(-3)) };
+      await env.DB.prepare('INSERT INTO passkeys(id,user_id,jwk,counter,created) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id,jwk=excluded.jwk').bind(b64u(ad.cred.id), me.id, JSON.stringify(jwk), ad.counter, nowIso()).run();
+      return json({ ok: true });
+    } catch (e) { return bad(e.message || 'Face ID konnte nicht eingerichtet werden.'); }
+  }
+  if (p === '/api/passkey' && req.method === 'DELETE') {
+    await env.DB.prepare('DELETE FROM passkeys WHERE user_id=?').bind(me.id).run();
+    return json({ ok: true });
+  }
+  if (p === '/api/passkey') {
+    const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM passkeys WHERE user_id=?').bind(me.id).first();
+    return json({ count: r.n });
   }
   if (p === '/api/token' && req.method === 'POST') {
     const t = rid(24);
@@ -1019,6 +1192,7 @@ async function handleApi(req, env, ctx, url) {
     if (um[2] && req.method === 'POST') {
       const t = rid(24);
       await env.DB.prepare('UPDATE users SET invite=?,hash=NULL,salt=NULL,profil=0 WHERE id=?').bind(await sha(t), target.id).run();
+      await env.DB.prepare('DELETE FROM passkeys WHERE user_id=?').bind(target.id).run();
       await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(target.id).run();
       return json({ ok: true, link: url.origin + '/?einladung=' + t });
     }
@@ -1034,7 +1208,7 @@ async function handleApi(req, env, ctx, url) {
     }
     if (req.method === 'DELETE') {
       if (target.id === me.id) return bad('Du kannst dich nicht selbst löschen.');
-      await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(target.id), env.DB.prepare('DELETE FROM push WHERE user_id=?').bind(target.id), env.DB.prepare('DELETE FROM users WHERE id=?').bind(target.id)]);
+      await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(target.id), env.DB.prepare('DELETE FROM push WHERE user_id=?').bind(target.id), env.DB.prepare('DELETE FROM passkeys WHERE user_id=?').bind(target.id), env.DB.prepare('DELETE FROM tokens WHERE user_id=?').bind(target.id), env.DB.prepare('DELETE FROM users WHERE id=?').bind(target.id)]);
       return json({ ok: true });
     }
   }
@@ -1131,6 +1305,7 @@ async function tick(env, ms) {
   const out = { from, to, morning: 0, reminders: 0 };
   try { out.morning = await morning(env, from, to); } catch (e) { out.err = e.message; }
   try { out.reminders = await reminders(env, from, to); } catch (e) { out.err = e.message; }
+  try { out.weekly = await weekly(env, from, to); } catch (e) { out.err = e.message; }
   if (Number(b.mm) % 15 < 5) {
     try { await syncPending(env); } catch (e) { /* später erneut */ }
     try { await refreshExternal(env); } catch (e) { /* später erneut */ }
@@ -1143,7 +1318,7 @@ async function tick(env, ms) {
   }
   return out;
 }
-export const _test = { tick, parseEvents, inQuiet, normPrefs, housekeeping, weeklyBackup, getCred, onDay, buildIcs };
+export const _test = { tick, parseEvents, inQuiet, normPrefs, housekeeping, weeklyBackup, getCred, onDay, buildIcs, weekPreview, cbor, derToRaw };
 
 async function quick(req, env, ctx, url) {
   const txt = (m, st = 200) => new Response(m, { status: st, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });

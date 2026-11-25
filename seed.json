@@ -1,0 +1,13 @@
+{"owner":"u_N5ScHyNg29x7ywnvP4cSmg","docs":[
+{"coll":"themen","id":"t-urlaub-2027","data":{"at":"2026-11-24T15:14:52.515Z","done":false,"due":"2026-12-01","name":"Urlaub 2027"}},
+{"coll":"eintraege","id":"e-mwuu5vc34831o","data":{"at":"2026-11-24T15:14:52.515Z","by":"u_N5ScHyNg29x7ywnvP4cSmg","kind":"gedanke","raw":"Sommerurlaub besprechen","text":"Den Sommerurlaub besprechen.","thema":"Urlaub 2027","titel":"Sommerurlaub besprechen"}},
+{"coll":"eintraege","id":"e-mwuu6jw5kcw31","data":{"at":"2026-11-24T15:15:24.341Z","by":"u_N5ScHyNg29x7ywnvP4cSmg","kind":"gedanke","raw":"Urlaub frühzeitig planen. Evtl in der Weihnachtszeit","text":"Urlaub frühzeitig planen, evtl. in der Weihnachtszeit.","thema":"Urlaub 2027","titel":"Urlaub frühzeitig planen"}},
+{"coll":"eintraege","id":"e-mwuu80ulxaytr","data":{"at":"2026-11-24T15:16:32.973Z","by":"u_N5ScHyNg29x7ywnvP4cSmg","done":false,"kind":"einkauf","text":"Mandarinen besorgen.","titel":"Mandarinen"}},
+{"coll":"eintraege","id":"e-mwuu81273xqc3","data":{"at":"2026-11-24T15:16:32.973Z","by":"u_N5ScHyNg29x7ywnvP4cSmg","done":false,"kind":"einkauf","text":"Klopapier besorgen.","titel":"Klopapier"}},
+{"coll":"eintraege","id":"e-mwuu81a76mv28","data":{"at":"2026-11-24T15:16:32.973Z","by":"u_N5ScHyNg29x7ywnvP4cSmg","done":false,"kind":"einkauf","text":"Frischkäse besorgen.","titel":"Frischkäse"}},
+{"coll":"eintraege","id":"e-mwuu9nspcgh5a","data":{"at":"2026-11-24T15:17:49.369Z","by":"u_N5ScHyNg29x7ywnvP4cSmg","done":false,"kind":"einkauf","text":"Bananen besorgen.","titel":"Bananen"}},
+{"coll":"eintraege","id":"e-mwuu9o04rfg0r","data":{"at":"2026-11-24T15:17:49.369Z","by":"u_N5ScHyNg29x7ywnvP4cSmg","done":false,"kind":"einkauf","text":"Buttermilch besorgen.","titel":"Buttermilch"}},
+{"coll":"eintraege","id":"e-mwuur293jx44p","data":{"at":"2026-11-24T15:31:21.255Z","by":"u_N5ScHyNg29x7ywnvP4cSmg","ende":"","ganztags":false,"kind":"termin","start":"2026-11-27T19:44","text":"Kalender beplotten","titel":"Kalender beplotten"}},
+{"coll":"eintraege","id":"e-mwuveta94qzx3","data":{"at":"2026-11-24T15:49:49.377Z","by":"u_N5ScHyNg29x7ywnvP4cSmg","done":false,"faellig":"","fuer":"u_N5ScHyNg29x7ywnvP4cSmg","kind":"aufgabe","text":"Den Müll rausbringen.","titel":"Müll rausbringen"}},
+{"coll":"eintraege","id":"e-mwuvetj646lvr","data":{"at":"2026-11-24T15:49:49.377Z","by":"u_N5ScHyNg29x7ywnvP4cSmg","done":false,"faellig":"","fuer":"u_N5ScHyNg29x7ywnvP4cSmg","kind":"aufgabe","text":"Ans Styropor im Keller denken.","titel":"Styropor aus dem Keller"}}
+]}

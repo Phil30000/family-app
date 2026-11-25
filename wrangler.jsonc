@@ -1,0 +1,11 @@
+{
+  "name": "family-app",
+  "main": "build/worker.js",
+  "compatibility_date": "2026-11-24",
+  "workers_dev": true,
+  "keep_vars": true,
+  "d1_databases": [{ "binding": "DB", "database_name": "family-app", "database_id": "97c44fbc-d35d-49ff-bc29-a195a440dff5" }],
+  "ai": { "binding": "AI" },
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "observability": { "enabled": true }
+}

@@ -145,6 +145,38 @@ async function allDocs(env, coll) {
   return results.map((r) => ({ id: r.id, data: JSON.parse(r.data) }));
 }
 
+/* ---------------- Rezept aus einem Link lesen (schema.org/Recipe) ---------------- */
+const decodeHtml = (x) => String(x || '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#(\d+);/g, (m, n) => String.fromCharCode(Number(n))).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+function findRecipe(node, depth = 0) {
+  if (!node || depth > 6) return null;
+  if (Array.isArray(node)) { for (const x of node) { const r = findRecipe(x, depth + 1); if (r) return r; } return null; }
+  if (typeof node !== 'object') return null;
+  const t = node['@type'];
+  if (t === 'Recipe' || (Array.isArray(t) && t.includes('Recipe'))) return node;
+  return findRecipe(node['@graph'], depth + 1) || findRecipe(node.mainEntity, depth + 1);
+}
+async function readRecipe(raw) {
+  let u;
+  try { u = new URL(raw.trim()); } catch (e) { throw new Error('Das ist kein gültiger Link.'); }
+  if (u.protocol !== 'https:' || /^(localhost|127\.|10\.|192\.168\.|169\.254\.)/.test(u.hostname) || !u.hostname.includes('.')) throw new Error('Bitte einen https-Link zu einer Rezeptseite einfügen.');
+  const r = await fetch(u.toString(), { headers: { 'user-agent': 'Mozilla/5.0 (FamilyApp Rezeptleser)', accept: 'text/html' }, redirect: 'follow', cf: { cacheTtl: 3600 } });
+  if (!r.ok) throw new Error('Die Seite antwortet nicht (' + r.status + ').');
+  const html = (await r.text()).slice(0, 2000000);
+  let rec = null;
+  for (const m of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { rec = findRecipe(JSON.parse(m[1].trim())); } catch (e) { /* nächstes */ }
+    if (rec) break;
+  }
+  const og = (k) => { const m = html.match(new RegExp('<meta[^>]+property=["\']og:' + k + '["\'][^>]+content=["\']([^"\']+)', 'i')); return m ? decodeHtml(m[1]) : ''; };
+  const titel = decodeHtml((rec && rec.name) || og('title') || (html.match(/<title>([^<]+)/i) || [])[1] || u.hostname).slice(0, 120);
+  const zutaten = rec && Array.isArray(rec.recipeIngredient) ? rec.recipeIngredient.map(decodeHtml).filter(Boolean).slice(0, 60) : [];
+  const y = rec ? (Array.isArray(rec.recipeYield) ? rec.recipeYield.join(' ') : String(rec.recipeYield || '')) : '';
+  const portionen = Number((y.match(/\d+/) || [])[0]) || 0;
+  let bild = rec && rec.image ? (typeof rec.image === 'string' ? rec.image : Array.isArray(rec.image) ? (typeof rec.image[0] === 'string' ? rec.image[0] : rec.image[0] && rec.image[0].url) : rec.image.url) : og('image');
+  if (bild && !/^https:\/\//.test(bild)) bild = '';
+  return { url: u.toString(), quelle: u.hostname.replace(/^www\./, ''), titel, zutaten, portionen, bild: bild || '' };
+}
+
 /* ---------------- Face ID (Passkeys / WebAuthn) ---------------- */
 function cbor(buf) {
   const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
@@ -1117,6 +1149,9 @@ async function handleApi(req, env, ctx, url) {
     if (!text) return bad('Bitte etwas eingeben.');
     return json(await capture(env, ctx, me, text));
   }
+  if (p === '/api/rezept' && req.method === 'POST') {
+    try { return json(await readRecipe(String(body.url || ''))); } catch (e) { return bad(e.message || 'Das Rezept konnte nicht gelesen werden.', 422); }
+  }
   if (p === '/api/einkaufen' && req.method === 'POST') {
     if (!['edit', 'mine'].includes(lvl(me, 'einkauf'))) return bad('Dafür fehlt dir die Berechtigung.', 403);
     const slot = Math.floor(Date.now() / (30 * 60000));
@@ -1340,7 +1375,7 @@ async function tick(env, ms) {
   }
   return out;
 }
-export const _test = { tick, parseEvents, inQuiet, normPrefs, housekeeping, weeklyBackup, getCred, onDay, buildIcs, weekPreview, cbor, derToRaw };
+export const _test = { readRecipe, tick, parseEvents, inQuiet, normPrefs, housekeeping, weeklyBackup, getCred, onDay, buildIcs, weekPreview, cbor, derToRaw };
 
 async function quick(req, env, ctx, url) {
   const txt = (m, st = 200) => new Response(m, { status: st, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });

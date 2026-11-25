@@ -44,6 +44,11 @@ const MS = '<?xml version="1.0" encoding="UTF-8"?>';
 globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === 'string' ? input : input.url;
   const u = new URL(url);
+  if (u.hostname === 'www.rezepte.example') {
+    const ld = { '@context': 'https://schema.org', '@graph': [{ '@type': 'WebPage' }, { '@type': 'Recipe', name: 'Hähnchen-Curry &amp; Reis', recipeYield: ['2', '2 Portionen'], image: ['https://img.rezepte.example/curry.jpg'], recipeIngredient: ['300 g Hähnchenbrust', '1 Dose Kokosmilch', '2 Zwiebeln', '1 EL Öl', 'Salz', '200 g Reis'] }] };
+    if (u.pathname === '/kaputt') return new Response('<html><title>Nur Text</title></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+    return new Response(`<html><head><title>x</title><script type="application/ld+json">${JSON.stringify(ld)}</script></head></html>`, { status: 200, headers: { 'content-type': 'text/html' } });
+  }
   if (u.hostname.endsWith('icloud.com')) {
     const method = init.method || 'GET';
     calls.caldav.push({ method, url, auth: init.headers && init.headers.authorization });

@@ -299,6 +299,23 @@ try {
   assert.equal(hack.menge, '1 kg', '500 g + 500 g'); assert.equal(hack.quellen.length, 2);
   await ph.fill('#buyIn', '200g Hackfleisch'); await ph.press('#buyIn', 'Enter'); await ph.waitForTimeout(200);
   const hack2 = JSON.parse((await env.DB.prepare("SELECT data FROM docs WHERE data LIKE '%Hackfleisch%' AND data NOT LIKE '%\"done\":true%'").first()).data); assert.equal(hack2.menge, '1,2 kg', 'Hand-Eintrag wird mitgezählt');
+  // Rezept-Link: lesen, anzeigen, Zutaten aus dem echten Rezept (auf Personen umgerechnet)
+  const d3 = new Date(today + 'T12:00:00'); d3.setDate(d3.getDate() + 3); const day3 = d3.toISOString().slice(0, 10);
+  const meal3 = ph.locator(`[data-d="${day3}"] input`); await meal3.fill('Curry'); await meal3.press('Enter');
+  await ph.locator(`[data-d="${day3}"] [data-a=rezept]`).click();
+  await ph.fill('#rezf [name=url]', 'https://www.rezepte.example/curry'); await ph.click('#rezf [type=submit]');
+  await ph.waitForSelector(`[data-d="${day3}"] a.recipe:has-text("Hähnchen-Curry & Reis")`);
+  assert.equal(await ph.getAttribute(`[data-d="${day3}"] a.recipe`, 'href'), 'https://www.rezepte.example/curry');
+  await ph.locator(`[data-d="${day3}"] [data-a=zutaten]`).click(); await ph.waitForSelector('#zutf');
+  assert.ok(await ph.locator('.sheet a.recipe').count() === 1, 'Rezept im Zutaten-Fenster verlinkt');
+  const ppl = Number(await ph.inputValue('#zutf [name=personen]'));
+  assert.equal(await ph.inputValue('#zutf [name=m0]'), (300 * ppl / 2 >= 1000 ? (300 * ppl / 2000).toLocaleString('de-DE') + ' kg' : 300 * ppl / 2 + ' g'), 'auf Personenzahl umgerechnet');
+  await ph.fill('#zutf [name=personen]', '2'); assert.equal(await ph.inputValue('#zutf [name=m0]'), '300 g');
+  assert.equal(await ph.isChecked('#zutf [name=z3]'), false, 'Öl ist abgewählt'); assert.equal(await ph.isChecked('#zutf [name=z4]'), false, 'Salz ist abgewählt');
+  await ph.screenshot({ path: 'test/shot-rezept.png', fullPage: true });
+  await ph.click('#zutf [type=submit]'); await ph.waitForSelector('.toast:has-text("Zutaten")');
+  const hb = JSON.parse((await env.DB.prepare("SELECT data FROM docs WHERE coll='eintraege' AND data LIKE '%Hähnchenbrust%'").first()).data);
+  assert.equal(hb.menge, '300 g'); assert.equal(hb.rezepte[0].url, 'https://www.rezepte.example/curry');
   await ph.screenshot({ path: 'test/shot-zutaten.png', fullPage: true });
 
   // Offline im Laden: abhaken, später nachholen

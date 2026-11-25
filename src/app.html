@@ -172,6 +172,14 @@ i.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right
 .cmt{font-size:14.5px;padding:6px 0;border-bottom:1px solid var(--line)}
 .cmt small{display:block;color:var(--soft);font-size:12.5px}
 textarea.field{min-height:96px;padding:10px 12px;resize:vertical}
+
+.recipe{display:flex;gap:10px;align-items:center;background:var(--tint);border-radius:12px;padding:10px 12px;margin:8px 0 2px;color:var(--ink);text-decoration:none}
+.recipe svg{flex:none;color:var(--blue)}
+.recipe b{display:block;font-size:15px;line-height:1.25}
+.recipe small{display:block;color:var(--soft);font-size:13px}
+.recipe .go{margin-left:auto;color:var(--blue);font-weight:700;font-size:14px;white-space:nowrap}
+.meal{padding:10px 0;border-bottom:1px solid var(--line)}
+.meal:last-child{border-bottom:0}
 @media(min-width:900px){main,.wrap{max-width:1120px}.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}.week.wide{grid-template-columns:repeat(7,minmax(0,1fr))}.week.wide .ev{display:block}.week.wide .ev .tm{display:block}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -588,10 +596,13 @@ function vEinkauf(){
 function openList(l){
   l=l||{};sheet(`<h2>${l.id?'Liste bearbeiten':'Neue Liste'}<button class="x" data-close aria-label="Schließen">×</button></h2><form id="listf" data-l="${esc(l.id||'')}"><label class="f">Name<input name="name" value="${esc(l.name||'')}" placeholder="z. B. Drogerie, Baumarkt, Packliste Urlaub" required></label><label class="f">Art<select name="typ">${opts([['einkauf','Einkaufsliste: Gekauftes verschwindet'],['liste','Checkliste: Haken bleiben (Packliste, Geschenkideen)']],l.typ||'einkauf')}</select></label><label class="f">Einkaufstag (für Einkaufslisten)<select name="tag">${opts(TAGE,l.tag===undefined?'':String(l.tag))}</select></label><p class="meta" style="margin-top:-4px">Mit Einkaufstag schlägt die App beim Essensplan die passende Liste vor: Zutaten fürs Essen am Donnerstag landen auf der Mittwochs-Liste, wenn es eine gibt.</p><div class="row"><button class="btn main" type="submit">Speichern</button>${l.id?'<button class="btn warn" type="button" data-a="listdel">Liste löschen</button>':''}</div></form>`);
 }
+const BOOK='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z"/><path d="M6.5 17A2.5 2.5 0 0 0 4 19.5 2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>';
+const recipeLink=r=>r&&r.url?`<a class="recipe" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${BOOK}<span><b>${esc(r.titel||'Rezept')}</b><small>${esc(r.quelle||'')}${r.portionen?' · für '+r.portionen+' Personen':''}</small></span><span class="go">Öffnen ↗</span></a>`:'';
 function vEssenCard(){
   const w=canWrite('essen');let b='';
-  for(let i=0;i<7;i++){const d=addDays(t0(),i);const f=F.find(x=>x.datum===d);
-    b+=`<div data-d="${d}" style="padding:6px 0;border-bottom:1px solid var(--line)"><div class="meta" style="font-weight:700">${esc(i<2?relDay(d):fmtDay(d))}</div>${w?`<input class="field" data-a="meal" placeholder="Was gibt es?" value="${esc(f&&f.gericht||'')}" aria-label="Essen ${esc(relDay(d))}" enterkeyhint="done">`:`<div>${esc(f&&f.gericht||'–')}</div>`}${w&&f&&f.gericht&&canWrite('einkauf')?`<button class="link" data-a="zutaten">Zutaten auf die Einkaufsliste</button>`:''}</div>`}
+  for(let i=0;i<7;i++){const d=addDays(t0(),i);const f=F.find(x=>x.datum===d);const r=f&&f.rezept;
+    const acts=w&&f&&f.gericht?`<div class="row" style="gap:4px 14px">${canWrite('einkauf')?'<button class="link" data-a="zutaten">Zutaten auf die Liste</button>':''}<button class="link" data-a="rezept">${r?'Rezept ändern':'+ Rezept-Link'}</button></div>`:'';
+    b+=`<div class="meal" data-d="${d}"><div class="meta" style="font-weight:700">${esc(i<2?relDay(d):fmtDay(d))}</div>${w?`<input class="field" data-a="meal" placeholder="Was gibt es?" value="${esc(f&&f.gericht||'')}" aria-label="Essen ${esc(relDay(d))}" enterkeyhint="done">`:`<div>${esc(f&&f.gericht||'–')}</div>`}${recipeLink(r)}${acts}</div>`}
   return `<section class="card" id="essen"><details${dk('essen')}><summary>Essensplan der Woche</summary>${b}</details></section>`;
 }
 function vIdeen(){
@@ -783,6 +794,7 @@ function openItem(key){
     f+=`<div class="two"><label class="f">Datum<input type="date" name="d" value="${esc(d)}"${dis}></label><label class="f">Uhrzeit (leer = ganztags)<input type="time" name="z" value="${esc(z)}"${dis}></label></div><div class="two"><label class="f">Wiederholen<select name="wdh"${dis}>${opts(WDH,e.wdh||'')}</select></label><label class="f">bis (optional)<input type="date" name="wdhBis" value="${esc(e.wdhBis||'')}"${dis}></label></div>${occ&&w&&e.wdh?`<p class="meta" style="margin:0 0 10px">Geöffnet am ${esc(fmtLong(occ))}. <button class="link" type="button" data-a="skip" data-occ="${esc(occ)}" style="min-height:0;padding:0">Nur diesen Termin absagen</button></p>`:''}<label class="f">Erinnerung<select name="erinnerung"${dis}>${opts(REMIND,e.erinnerung===undefined||e.erinnerung===''?'60':e.erinnerung)}</select></label><div class="two"><label class="f">Für<select name="fuer"${dis}>${fuerOpts(fuerKey(e))}</select></label><label class="f">Sichtbar<select name="sicht"${dis}>${sichtOpts(e.sicht)}</select></label></div>`}
   if(e.kind==='aufgabe')f+=`<div class="two"><label class="f">Fällig am<input type="date" name="faellig" value="${esc(e.faellig||'')}"${dis}></label><label class="f">Uhrzeit (dann klingelt es)<input type="time" name="zeit" value="${esc(e.zeit||'')}"${dis}></label></div><div class="two"><label class="f">Für<select name="fuer"${dis}>${fuerOpts(fuerKey(e))}</select></label><label class="f">Sichtbar<select name="sicht"${dis}>${sichtOpts(e.sicht)}</select></label></div>`;
   if(e.kind==='gedanke'){const names=[...new Set(T.map(t=>t.name).concat(e.thema?[e.thema]:[]))];f+=`<label class="f">Thema<input name="thema" list="themes" value="${esc(e.thema||'')}"${dis}><datalist id="themes">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist></label>`}
+  if(e.kind==='einkauf'&&((e.quellen&&e.quellen.length)||(e.rezepte&&e.rezepte.length)))f+=`<div class="f">Gebraucht für<div style="font-weight:400;color:var(--ink)">${esc((e.quellen||[]).join(', '))}</div>${(e.rezepte||[]).map(r=>recipeLink({url:r.url,titel:r.name,quelle:(()=>{try{return new URL(r.url).hostname.replace(/^www\./,'')}catch(x){return''}})()})).join('')}</div>`;
   if(e.kind==='einkauf'&&Ls.length)f+=`<label class="f">Liste<select name="liste"${dis}>${opts([['','Einkauf']].concat(Ls.map(l=>[l.id,l.name])),listOf(e.liste||'')?e.liste:'')}</select></label>`;
   if(e.kind==='einkauf')f+=`<div class="two"><label class="f">Menge<input name="menge" value="${esc(e.menge||'')}" placeholder="z. B. 2 Liter"${dis}></label><label class="f">Abteilung<select name="kat"${dis}>${opts(KAT_ORDER.map(x=>[x,x]),e.kat||katOf(e.titel))}</select></label></div>`;
   f+=`<label class="f">Notiz<input name="text" value="${esc(e.text&&e.text!==e.titel?e.text:'')}"${dis}></label>`;
@@ -801,6 +813,7 @@ $('#sheetRoot').addEventListener('submit',async ev=>{
     await upd('themen',t.id,{name,due:isDate(fd.due)?fd.due:t.due,sicht:fd.sicht});
     for(const e of themeEntries(t.name))if(e.by===meId||isAdult())await upd('eintraege',e.id,{thema:name,sicht:fd.sicht});
     toast('Gespeichert.');return}
+  if(fm0.id==='rezf'){ev.preventDefault();return saveRecipe(fm0)}
   if(fm0.id==='zutf'){ev.preventDefault();return saveZutaten(fm0)}
   if(fm0.id==='newf'){ev.preventDefault();return saveNew(fm0)}
   if(fm0.id==='pinf'){ev.preventDefault();const t=String(new FormData(fm0).get('t')||'').trim().slice(0,500);if(!t)return;closeSheet();
@@ -848,6 +861,7 @@ async function convert(e,k){
   if(k==='nachricht')Object.assign(ch,{done:false,readBy:[meId],text:e.text||e.titel});
   await upd('eintraege',e.id,ch);
 }
+$('#sheetRoot').addEventListener('input',ev=>{if(ev.target.dataset.a==='persons')scaleZutaten()});
 $('#sheetRoot').addEventListener('change',async ev=>{
   const el=ev.target;if(el.dataset.a!=='convert')return;
   const e=E.find(y=>y.id===el.closest('form').dataset.e);if(!e)return;
@@ -855,6 +869,8 @@ $('#sheetRoot').addEventListener('change',async ev=>{
 });
 $('#sheetRoot').addEventListener('click',async ev=>{
   const b=ev.target.closest('button[data-a]');if(!b)return;const fm=b.closest('form');
+  if(b.dataset.a==='rezept2'){const d=$('#zutf').dataset.d;openRecipe(d);return}
+  if(b.dataset.a==='rezdel'){const d=fm.dataset.d;closeSheet();await upd('essen','d-'+d,{rezept:null});return}
   if(b.dataset.a==='tl'){const id=b.closest('[data-t]').dataset.t;const n=b.dataset.n;const d=n==='m1'?addMonths(today(),1):n==='m3'?addMonths(today(),3):addDays(today(),7);closeSheet();await upd('themen',id,{due:d,done:false});toast('Meldet sich am '+fmtDay(d)+'.');return}
   if(b.dataset.a==='tdelsheet'){const t=T.find(x=>x.id===fm.dataset.t);if(!t)return;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Mit allen Gedanken löschen?';return}closeSheet();await deleteTheme(t);toast('Gelöscht: '+t.name);return}
   if(b.dataset.a==='listdel'){const id=fm.dataset.l;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Wirklich? Alle Einträge darin auch';return}closeSheet();for(const e of E.filter(e=>e.kind==='einkauf'&&e.liste===id))await del('eintraege',e.id);await del('listen',id);curList='';LS.set('fa-list','');render();return}
@@ -885,37 +901,64 @@ async function capture(text){
   const lines=r.lines.map(l=>{const a=(r.ask||[]).find(x=>l.open&&l.open.slice(2)===x.id);return a?Object.assign({},l,{ask:a}):l});
   toast(lines,r.undo&&r.undo.length?async()=>{for(const x of r.undo){try{await del(x[0],x[1])}catch(e){}}}:null,r.ask&&r.ask.length?14000:9000);
 }
+const PANTRY=/^(salz|pfeffer|öl|olivenöl|rapsöl|mehl|zucker|wasser|gewürz|paprikapulver|muskat|oregano|basilikum, getrocknet|brühe, instant)/i;
 async function addZutaten(d){
   const f=F.find(x=>x.datum===d);if(!f||!f.gericht)return;
-  toast('Suche Zutaten für '+f.gericht+' …');
-  const r=await askJson(`Nenne die Zutaten, die man für "${f.gericht}" für eine Familie mit 4 Personen einkaufen muss. Lass Grundvorräte weg (Salz, Pfeffer, Öl, Mehl, Zucker, Gewürze). Kurze deutsche Namen ohne Menge im Namen, z. B. "Hähnchenbrust". Einheit nur g, ml oder Stk. Antworte nur mit JSON: {"zutaten":[{"name":"","menge":0,"einheit":"g"}]}`,x=>Array.isArray(x.zutaten));
-  const zs=r?r.zutaten.map(z=>typeof z==='string'?splitItem(z):{name:String(z.name||'').trim(),qty:z.menge>0?(qtyOf(z.menge+' '+(z.einheit||''))||qtyOf(String(z.menge))):null}).filter(z=>z.name).slice(0,25):[];
-  $('#toastRoot').innerHTML='';
+  const r=f.rezept;let zs=[],fromRecipe=false;
+  if(r&&r.zutaten&&r.zutaten.length){fromRecipe=true;zs=r.zutaten.map(z=>{const sp=splitItem(z);return{name:sp.name.split(/,|\(/)[0].trim(),qty:sp.qty,raw:z}}).filter(z=>z.name)}
+  else{
+    toast('Suche Zutaten für '+f.gericht+' …');
+    const a=await askJson(`Nenne die Zutaten, die man für "${f.gericht}" für eine Familie mit 4 Personen einkaufen muss. Lass Grundvorräte weg (Salz, Pfeffer, Öl, Mehl, Zucker, Gewürze). Kurze deutsche Namen ohne Menge im Namen, z. B. "Hähnchenbrust". Einheit nur g, ml oder Stk. Antworte nur mit JSON: {"zutaten":[{"name":"","menge":0,"einheit":"g"}]}`,x=>Array.isArray(x.zutaten));
+    zs=a?a.zutaten.map(z=>typeof z==='string'?splitItem(z):{name:String(z.name||'').trim(),qty:z.menge>0?(qtyOf(z.menge+' '+(z.einheit||''))||qtyOf(String(z.menge))):null}).filter(z=>z.name).slice(0,25):[];
+    $('#toastRoot').innerHTML='';
+  }
   if(!zs.length){toast('Keine Zutaten gefunden. Bitte von Hand eintragen.');return}
+  const base=fromRecipe&&r.portionen?r.portionen:4;const people=Math.max(1,USERS.filter(u=>!['tablet','gast'].includes(u.role)).length)||4;
   const lists=[['','Einkauf']].concat(Ls.filter(l=>l.typ!=='liste').map(l=>[l.id,l.name+(l.tag!==undefined&&l.tag!==''?' ('+TAGE.find(t=>t[0]===String(l.tag))[1]+')':'')]));
   const sug=suggestList(d);
-  sheet(`<h2>Zutaten für ${esc(f.gericht)}<button class="x" data-close aria-label="Schließen">×</button></h2><form id="zutf" data-d="${d}"><p class="meta" style="margin-top:0">Für ${esc(relDay(d)==='Heute'||relDay(d)==='Morgen'?relDay(d).toLowerCase():fmtLong(d))}. Was du zu Hause hast, einfach abwählen. Mengen kannst du ändern.</p>${zs.map((z,i)=>`<div class="task" style="min-height:48px"><input type="checkbox" name="z${i}" checked aria-label="${esc(z.name)}"><input class="field" name="n${i}" value="${esc(z.name)}" style="flex:2" aria-label="Zutat"><input class="field" name="m${i}" value="${esc(z.qty?fmtQty(z.qty):'')}" placeholder="Menge" style="flex:1;min-width:84px" aria-label="Menge"></div>`).join('')}<label class="f" style="margin-top:10px">Auf welche Liste?<select name="liste">${opts(lists,sug)}</select></label>${Ls.some(l=>l.tag!==undefined&&l.tag!=='')?'':'<p class="meta">Tipp: Lege Listen wie „Samstag“ und „Mittwoch“ mit Einkaufstag an. Dann schlägt die App automatisch die passende Liste vor, damit Frisches frisch bleibt.</p>'}<div class="row"><button class="btn main" type="submit">Auf die Liste</button></div></form>`);
+  const head=fromRecipe?`<p class="meta" style="margin:0 0 4px">Aus dem Rezept:</p>${recipeLink(r)}`:`<p class="meta" style="margin-top:0">Kein Rezept hinterlegt. Die Zutaten hat die KI für 4 Personen geschätzt. <button class="link" type="button" data-a="rezept2" style="min-height:0;padding:0">Rezept-Link hinzufügen</button></p>`;
+  sheet(`<h2>Zutaten für ${esc(f.gericht)}<button class="x" data-close aria-label="Schließen">×</button></h2>${head}<form id="zutf" data-d="${d}" data-base="${base}"><div class="row" style="margin:10px 0 4px"><label class="meta" style="display:flex;gap:8px;align-items:center">Für<input class="field" type="number" name="personen" min="1" max="20" value="${fromRecipe?people:4}" style="width:72px" data-a="persons">Personen</label>${fromRecipe&&r.portionen?`<span class="meta">(Rezept: ${r.portionen})</span>`:''}</div><p class="meta" style="margin:0">Was du zu Hause hast, abwählen. Mengen kannst du ändern.</p>${zs.map((z,i)=>`<div class="task" style="min-height:48px"><input type="checkbox" name="z${i}"${PANTRY.test(z.name)?'':' checked'} aria-label="${esc(z.name)}"><input class="field" name="n${i}" value="${esc(z.name)}" style="flex:2" aria-label="Zutat"><input class="field" name="m${i}" data-q="${z.qty?esc(JSON.stringify(z.qty)):''}" value="" placeholder="Menge" style="flex:1;min-width:84px" aria-label="Menge"></div>`).join('')}<label class="f" style="margin-top:10px">Auf welche Liste?<select name="liste">${opts(lists,sug)}</select></label>${Ls.some(l=>l.tag!==undefined&&l.tag!=='')?'':'<p class="meta">Tipp: Lege Listen wie „Samstag“ und „Mittwoch“ mit Einkaufstag an. Dann schlägt die App die passende Liste vor.</p>'}<div class="row"><button class="btn main" type="submit">Auf die Liste</button></div></form>`);
+  scaleZutaten();
+}
+function scaleZutaten(){
+  const fm=$('#zutf');if(!fm)return;const base=Number(fm.dataset.base)||4;const p=Math.max(1,Number(fm.querySelector('[name=personen]').value)||base);
+  fm.querySelectorAll('[data-q]').forEach(i=>{if(!i.dataset.q)return;const q=JSON.parse(i.dataset.q);const n=q.n*p/base;i.value=fmtQty({n:q.u==='Stk'||q.u==='Dose'||q.u==='Pck'||q.u==='Bund'?Math.ceil(n*2)/2:n,u:q.u})});
+}
+function openRecipe(d){
+  const f=F.find(x=>x.datum===d)||{};const r=f.rezept;const q=encodeURIComponent(f.gericht||'');
+  sheet(`<h2>Rezept für ${esc(f.gericht||fmtLong(d))}<button class="x" data-close aria-label="Schließen">×</button></h2>${r?recipeLink(r):''}<form id="rezf" data-d="${d}"><label class="f">Link zum Rezept<input name="url" type="url" inputmode="url" placeholder="https://www.chefkoch.de/rezepte/…" value="${esc(r?r.url:'')}" required></label><p class="meta">Kopiere den Link aus Safari (Teilen › Kopieren) und füge ihn hier ein. Die App liest Name, Portionen und Zutaten aus dem Rezept.</p><div class="row"><button class="btn main" type="submit">Übernehmen</button>${r?'<button class="btn warn" type="button" data-a="rezdel">Link entfernen</button>':''}</div></form>${f.gericht?`<p class="meta" style="margin-top:14px">Noch kein Rezept? Suchen auf <a href="https://www.chefkoch.de/rs/s0/${q}/Rezepte.html" target="_blank" rel="noopener noreferrer">Chefkoch</a> · <a href="https://www.lecker.de/suche?search=${q}" target="_blank" rel="noopener noreferrer">lecker.de</a> · <a href="https://www.google.com/search?q=${q}+Rezept" target="_blank" rel="noopener noreferrer">Google</a></p>`:''}`);
+}
+async function saveRecipe(fm){
+  const d=fm.dataset.d,url=String(new FormData(fm).get('url')||'').trim();const b=fm.querySelector('[type=submit]');b.disabled=true;b.textContent='Lese Rezept …';
+  try{
+    const r=await api('/api/rezept',{url});const fid='d-'+d;const ex=F.find(x=>x.id===fid);
+    const rez={url:r.url,titel:r.titel,quelle:r.quelle,portionen:r.portionen,zutaten:r.zutaten};
+    if(ex)await upd('essen',fid,Object.assign({rezept:rez},ex.gericht?{}:{gericht:r.titel}));else await put('essen',fid,{datum:d,gericht:r.titel,rezept:rez,by:meId});
+    closeSheet();toast(r.zutaten.length?'Rezept übernommen: '+r.zutaten.length+' Zutaten erkannt.':'Link gespeichert. Die Seite verrät keine Zutatenliste; die schätzt dann die KI.');
+  }catch(e){toast(e.message);b.disabled=false;b.textContent='Übernehmen'}
 }
 async function saveZutaten(fm){
   const fd=new FormData(fm);const f=F.find(x=>x.datum===fm.dataset.d);const listId=listOf(fd.get('liste'))?fd.get('liste'):'';
   const src=(f?f.gericht:'Rezept')+' '+WD[new Date(fm.dataset.d+'T12:00:00').getDay()].slice(0,2);const out=[];closeSheet();
-  for(let i=0;fd.has('n'+i);i++){if(!fd.get('z'+i))continue;const n=String(fd.get('n'+i)||'').trim();if(!n)continue;const r=await mergeBuy(n,String(fd.get('m'+i)||'').trim(),listId,src);out.push((r.merged?'zusammengeführt: ':'')+r.titel+(r.menge?' '+r.menge:''))}
+  const link=f&&f.rezept?{name:f.gericht,url:f.rezept.url}:null;
+  for(let i=0;fd.has('n'+i);i++){if(!fd.get('z'+i))continue;const n=String(fd.get('n'+i)||'').trim();if(!n)continue;const r=await mergeBuy(n,String(fd.get('m'+i)||'').trim(),listId,src,link);out.push((r.merged?'zusammengeführt: ':'')+r.titel+(r.menge?' '+r.menge:''))}
   curList=listId;LS.set('fa-list',listId);
   toast(['Auf „'+(listOf(listId)?listOf(listId).name:'Einkauf')+'“: '+out.length+' Zutaten'].concat(out.filter(x=>x.startsWith('zusammen')).slice(0,4)));
 }
 // Gleiche Artikel auf derselben Liste zusammenführen (200 g + 500 g = 700 g)
-async function mergeBuy(raw,menge,listId,src){
+async function mergeBuy(raw,menge,listId,src,link){
+  const withLink=x=>{const a=(x||[]).filter(r=>!link||r.url!==link.url);return link?a.concat(link):a};
   const sp=splitItem(raw);const name=sp.name.slice(0,80);const qty=(menge?qtyOf(menge):null)||sp.qty;const mengeTxt=qty?fmtQty(qty):String(menge||'').slice(0,40);
   const key=name.toLowerCase(),at=new Date().toISOString();
   const same=e=>e.kind==='einkauf'&&(listOf(e.liste||'')?e.liste:'')===listId&&splitItem(e.titel).name.toLowerCase()===key;
   const open=E.find(e=>same(e)&&!e.done);
   if(open){const q1=qtyOf(open.menge)||splitItem(open.titel).qty;const sum=addQty(q1,qty);
     const m=sum?fmtQty(sum):[open.menge,mengeTxt].filter(Boolean).join(' + ');
-    await upd('eintraege',open.id,{titel:splitItem(open.titel).name,menge:m,quellen:Array.from(new Set((open.quellen||[]).concat(src?[src]:[])))});
+    await upd('eintraege',open.id,{titel:splitItem(open.titel).name,menge:m,quellen:Array.from(new Set((open.quellen||[]).concat(src?[src]:[]))),rezepte:withLink(open.rezepte)});
     return {merged:true,titel:open.titel,menge:m,id:open.id};}
   const old=E.find(e=>same(e)&&e.done);
-  if(old){await upd('eintraege',old.id,{done:false,at,menge:mengeTxt,quellen:src?[src]:[],titel:name});return {id:old.id,titel:name,menge:mengeTxt}}
-  const id=uid();await put('eintraege',id,Object.assign({kind:'einkauf',titel:name,text:name,by:meId,at,done:false,kat:katOf(name),menge:mengeTxt},src?{quellen:[src]}:{},listId?{liste:listId}:{}));
+  if(old){await upd('eintraege',old.id,{done:false,at,menge:mengeTxt,quellen:src?[src]:[],rezepte:link?[link]:[],titel:name});return {id:old.id,titel:name,menge:mengeTxt}}
+  const id=uid();await put('eintraege',id,Object.assign({kind:'einkauf',titel:name,text:name,by:meId,at,done:false,kat:katOf(name),menge:mengeTxt},src?{quellen:[src]}:{},link?{rezepte:[link]}:{},listId?{liste:listId}:{}));
   return {id,titel:name,menge:mengeTxt,neu:true};
 }
 async function addBuy(raw){
@@ -990,6 +1033,7 @@ $('#p').addEventListener('click',async ev=>{
     if(a==='logout'){await api('/api/logout',{});localStorage.removeItem('fa-cache');localStorage.removeItem('fa-me');location.href='/';return}
     if(a==='mine'||a==='all'){mineOnly=a==='mine';render();return}
     if(a==='zutaten'&&dEl)return await addZutaten(dEl.dataset.d);
+    if(a==='rezept'&&dEl){openRecipe(dEl.dataset.d);return}
     if(a==='share'||a==='copy'){const box=btn.closest('[data-link]');if(!box)return;
       if(a==='share'){try{await navigator.share({title:'Family App',text:'Hier ist deine Einladung zur Family App:',url:box.dataset.link})}catch(e){}}
       else{try{await navigator.clipboard.writeText(box.dataset.link);toast('Link kopiert.')}catch(e){box.querySelector('input').select()}}

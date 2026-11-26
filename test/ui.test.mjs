@@ -337,6 +337,18 @@ try {
   assert.equal(await ph.locator('summary:has-text("Zuletzt erledigt")').count(), 0, 'alle erledigten gelöscht');
   await ph.click('.tab[data-v=ideen]');
   if (!(await ph.isVisible('.topic:has-text("Weihnachten") [data-a=tdone]'))) await ph.click('.topic:has-text("Weihnachten") summary');
+  // Einzelnen Gedanken im Thema löschen (Thema bleibt)
+  const nL = await ph.locator('.topic:has-text("Weihnachten") .lines li').count();
+  assert.ok(nL >= 1, 'Gedanken sichtbar');
+  const li0 = ph.locator('.topic:has-text("Weihnachten") .lines li').first();
+  const gtxt = (await li0.locator('.ltxt').innerText()).split(' ·')[0].trim();
+  await li0.locator('[data-a=edel]').click(); await ph.waitForTimeout(100);
+  assert.equal(await ph.locator('.topic:has-text("Weihnachten") .lines li').count(), nL, 'erster Tipp fragt nur nach');
+  if (!(await ph.isVisible('.topic:has-text("Weihnachten") [data-a=edel]'))) await ph.click('.topic:has-text("Weihnachten") summary');
+  await ph.locator('.topic:has-text("Weihnachten") .lines li').first().locator('[data-a=edel]').click(); await ph.waitForTimeout(250);
+  assert.equal(await ph.locator('.topic:has-text("Weihnachten") .lines li').count(), nL - 1, 'Gedanke gelöscht');
+  assert.equal(await ph.locator('.topic:has-text("Weihnachten")').count(), 1, 'Thema bleibt');
+  if (!(await ph.isVisible('.topic:has-text("Weihnachten") [data-a=tdone]'))) await ph.click('.topic:has-text("Weihnachten") summary');
   await ph.click('.topic:has-text("Weihnachten") [data-a=tdone]'); await ph.waitForTimeout(150);
   await ph.click('summary:has-text("Erledigt (")'); if (!(await ph.isVisible('.topic:has-text("Weihnachten") [data-a=tdel]'))) await ph.click('.topic:has-text("Weihnachten") summary');
   await ph.click('.topic:has-text("Weihnachten") [data-a=tdel]'); await ph.click('.topic:has-text("Weihnachten") [data-a=tdel]'); await ph.waitForTimeout(200);

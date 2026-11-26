@@ -110,7 +110,12 @@ details[open]>summary:before{transform:rotate(90deg)}
 .topic>summary:before{color:var(--soft)}
 .topic>summary span{margin-left:auto;font-size:12px;font-weight:400;color:var(--soft);white-space:nowrap}
 .lines{margin:0 0 8px;padding:0 0 0 16px;font-size:15px}
-.lines li{padding:2px 0}
+.lines{list-style:none;padding-left:0}
+.lines li{padding:4px 0;display:flex;gap:8px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line,rgba(0,0,0,.06))}
+.lines li:last-child{border-bottom:0}
+.lines .ltxt{flex:1;color:inherit;font-size:15px}
+.lines .ltxt span{color:var(--soft);font-size:12px}
+.lines .ldel{flex:0 0 auto;min-height:36px;padding:0 12px;color:#b3261e}
 .lines span{color:var(--soft);font-size:12px}
 .search{width:100%;min-height:44px;margin:4px 0 8px;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:16px Figtree,system-ui,sans-serif}
 .meta{font-size:13.5px;color:var(--soft)}
@@ -621,7 +626,7 @@ function topicRow(t){
   const es=themeEntries(t.name);const late=!t.done&&t.due&&t.due<=t0();const w=fullEdit(t,'themen');
   const acts=!w?'':t.done?`<button class="btn sm" data-a="reopen">Wieder öffnen</button><button class="btn sm warn" data-a="tdel">Löschen</button>`:`<button class="btn sm" data-a="new" data-k="gedanke" data-t="${esc(t.name)}">+ Gedanke</button><button class="btn sm" data-a="later">Später</button><button class="btn sm" data-a="tdone">Erledigt</button><button class="btn sm" data-a="tedit">Bearbeiten</button>`;
   const when=t.done?'erledigt':late?'jetzt dran':'meldet sich '+(relDay(t.due)==='Morgen'?'morgen':'am '+fmtDay(t.due));
-  return `<details class="topic" data-t="${esc(t.id)}"${openTopics.has(t.id)?' open':''}><summary>${esc(t.name)}<span class="${late?'late':''}">${esc(when)} · ${es.length}</span></summary><ul class="lines">${es.map(e=>`<li>${esc(e.text||e.titel)} <span>· ${esc(who(e.by)||'')}, ${esc(fmtDay(String(e.at||'').slice(0,10)))}</span></li>`).join('')}</ul><div class="row" style="margin-bottom:8px">${acts}</div></details>`;
+  return `<details class="topic" data-t="${esc(t.id)}"${openTopics.has(t.id)?' open':''}><summary>${esc(t.name)}<span class="${late?'late':''}">${esc(when)} · ${es.length}</span></summary><ul class="lines">${es.map(e=>`<li><span class="ltxt">${esc(e.text||e.titel)} <span>· ${esc(who(e.by)||'')}, ${esc(fmtDay(String(e.at||'').slice(0,10)))}</span></span>${fullEdit(e,'themen')?`<button class="btn sm ldel" data-a="edel" data-e="${esc(e.id)}" aria-label="Gedanken löschen">Löschen</button>`:''}</li>`).join('')}</ul><div class="row" style="margin-bottom:8px">${acts}</div></details>`;
 }
 function openTopic(t,mode){
   if(mode==='later')return sheet(`<h2>„${esc(t.name)}“ später wieder zeigen<button class="x" data-close aria-label="Schließen">×</button></h2><div class="row" data-t="${esc(t.id)}" style="margin-bottom:10px"><button class="btn sm" data-a="tl" data-n="7">In 1 Woche</button><button class="btn sm" data-a="tl" data-n="m1">In 1 Monat</button><button class="btn sm" data-a="tl" data-n="m3">In 3 Monaten</button></div><form id="tdue" data-t="${esc(t.id)}"><label class="f">Oder an einem Tag<input type="date" name="due" value="${esc(t.due||'')}" min="${t0()}"></label><button class="btn main" type="submit">Speichern</button></form>`);
@@ -1079,6 +1084,7 @@ $('#p').addEventListener('click',async ev=>{
     if(a==='calsync'){btn.disabled=true;const r=await api('/api/admin/calsync',{});toast(`${r.synced} eingetragen, ${r.external||0} Termine gelesen${r.failed?', '+r.failed+' fehlgeschlagen':''}.`);pull();loadExternal();return}
     if(a==='caloff'){await api('/api/admin/calendar',{});CAL=null;X=[];render();return}
     if(tEl){const t=T.find(x=>x.id===tEl.dataset.t);if(!t)return;
+      if(a==='edel'){const e=E.find(x=>x.id===btn.dataset.e);if(!e||!fullEdit(e,'themen'))return;if(!sure(btn,'edel'+e.id,'Wirklich?'))return;await del('eintraege',e.id);toast('Gedanke gelöscht.');return}
       if(a==='later'||a==='tedit'){openTopic(t,a);return}
       if(a==='tdel'){if(!sure(btn,'tdel'+t.id,'Wirklich löschen?'))return;await deleteTheme(t);toast('Gelöscht: '+t.name);return}
       const ch={d7:{due:addDays(today(),7),done:false},m1:{due:addMonths(today(),1),done:false},tdone:{done:true},reopen:{done:false,due:addDays(today(),7)}}[a];

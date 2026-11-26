@@ -277,6 +277,13 @@ function canWrite(u, coll, nd, od) {
   return true;
 }
 const can = (u, area) => lvl(u, area) !== 'off';
+// Sprache -> Text (Workers AI Whisper). Audio kommt als Base64 (iPhone: mp4/aac, Android/PC: webm/opus).
+async function transcribe(env, b64) {
+  let r;
+  try { r = await env.AI.run('@cf/openai/whisper-large-v3-turbo', { audio: b64, language: 'de' }); }
+  catch (e) { const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); r = await env.AI.run('@cf/openai/whisper', { audio: [...arr] }); }
+  return String((r && (r.text || r.response)) || '').replace(/\s+/g, ' ').trim().slice(0, 2000);
+}
 const canCapture = (u) => AREAS.some((a) => ['edit', 'mine'].includes(lvl(u, a)));
 const docArea = (coll, data) => (coll === 'eintraege' ? KIND_AREA[data && data.kind] || 'themen' : COLL_AREA[coll]);
 
@@ -1148,6 +1155,12 @@ async function handleApi(req, env, ctx, url) {
     const text = String(body.text || '').trim().slice(0, 2000);
     if (!text) return bad('Bitte etwas eingeben.');
     return json(await capture(env, ctx, me, text));
+  }
+  if (p === '/api/transcribe' && req.method === 'POST') {
+    if (!canCapture(me)) return bad('Dafür fehlt dir die Berechtigung.', 403);
+    const a = String(body.audio || '');
+    if (a.length < 200 || a.length > 8_000_000) return bad('Die Aufnahme war leer oder zu lang.');
+    try { return json({ text: await transcribe(env, a) }); } catch (e) { return bad('Die Sprache konnte nicht umgewandelt werden.', 502); }
   }
   if (p === '/api/rezept' && req.method === 'POST') {
     try { return json(await readRecipe(String(body.url || ''))); } catch (e) { return bad(e.message || 'Das Rezept konnte nicht gelesen werden.', 422); }

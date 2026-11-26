@@ -15,7 +15,7 @@ export function makeEnv() {
   const db = new DatabaseSync(':memory:');
   return {
     DB: { prepare: (sql) => new Stmt(db, sql), batch: async (ss) => { const out = []; for (const s of ss) out.push(await s.run()); return out; } },
-    AI: { run: async (model, { messages }) => ({ response: fakeAI(messages.at(-1).content) }) },
+    AI: { run: async (model, a) => (a.audio ? { text: 'Milch und Brot' } : { response: fakeAI(a.messages.at(-1).content) }) },
     SETUP_CODE: 'geheim-123',
     ICLOUD_USER: 'philippe@example.com',
     ICLOUD_PASS: 'abcd-efgh-ijkl-mnop',

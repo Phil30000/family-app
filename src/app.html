@@ -774,13 +774,37 @@ function closeSheet(){if(rec){try{rec.stop()}catch(e){}rec=null}$('#sheetRoot').
 $('#sheetRoot').addEventListener('click',ev=>{if(ev.target.id==='shade'||ev.target.closest('[data-close]'))closeSheet()});
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&$('#shade'))closeSheet()});
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null;
+// Aufnahme: Mikrofon wird einmal freigegeben und bleibt (stummgeschaltet) bis zum Schließen der App offen,
+// damit iOS nicht bei jedem Sprechen neu fragt. Text kommt vom Server (Whisper).
+const CAN_REC=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
+const MIC=CAN_REC||!!SR;
+const Voice={stream:null,mr:null,chunks:[],
+  async start(){let fresh=false;
+    if(!(this.stream&&this.stream.getAudioTracks().some(t=>t.readyState==='live'))){this.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});fresh=true}
+    this.stream.getAudioTracks().forEach(t=>t.enabled=true);
+    const mt=['audio/mp4','audio/webm;codecs=opus','audio/webm'].find(m=>MediaRecorder.isTypeSupported(m));
+    this.chunks=[];const mr=this.mr=new MediaRecorder(this.stream,mt?{mimeType:mt}:{});
+    mr.ondataavailable=e=>{if(e.data&&e.data.size)this.chunks.push(e.data)};mr.start();return {fresh}},
+  mute(){if(this.stream)this.stream.getAudioTracks().forEach(t=>t.enabled=false)},
+  cancel(){const mr=this.mr;this.mr=null;this.mute();if(mr&&mr.state!=='inactive'){mr.onstop=null;try{mr.stop()}catch(e){}}},
+  stop(){return new Promise((res,rej)=>{const mr=this.mr;if(!mr||mr.state==='inactive'){res('');return}
+    mr.onstop=async()=>{this.mute();this.mr=null;const blob=new Blob(this.chunks,{type:mr.mimeType||'audio/mp4'});this.chunks=[];if(blob.size<1500){res('');return}
+      try{const buf=new Uint8Array(await blob.arrayBuffer());let bin='';for(let i=0;i<buf.length;i+=0x8000)bin+=String.fromCharCode.apply(null,buf.subarray(i,i+0x8000));
+        const r=await api('/api/transcribe',{audio:btoa(bin),mime:blob.type});res(String(r&&r.text||'').trim())}catch(e){rej(e)}};
+    try{mr.stop()}catch(e){rej(e)}})}};
+window.addEventListener('pagehide',()=>{try{Voice.cancel();if(Voice.stream)Voice.stream.getTracks().forEach(t=>t.stop())}catch(e){}});
 function openCapture(pre){
   let draft=typeof pre==='string'?pre:LS.get('fa-draft','');if(typeof draft!=='string'||/^\[object /.test(draft)){draft='';LS.set('fa-draft','')}
-  sheet(`<h2>Was gibt es?<button class="x" data-close aria-label="Schließen">×</button></h2><form id="cap"><textarea id="t" placeholder="Zahnarzt Dienstag 15 Uhr. Milch und Brot. Conny muss den TÜV machen." aria-label="Neuer Eintrag" enterkeyhint="send">${esc(draft)}</textarea><div class="row" style="margin-top:10px">${SR?`<button class="mic" type="button" id="mic" aria-label="Sprechen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>`:''}<span class="hint" id="st">${SR?'Tipp: Den runden Mikrofon-Knopf gedrückt halten startet die Aufnahme sofort.':'Tipp: Mikrofon der Tastatur antippen und sprechen.'}</span><button class="btn main" id="go" type="submit">Merken</button></div></form>`);
+  sheet(`<h2>Was gibt es?<button class="x" data-close aria-label="Schließen">×</button></h2><form id="cap"><textarea id="t" placeholder="Zahnarzt Dienstag 15 Uhr. Milch und Brot. Conny muss den TÜV machen." aria-label="Neuer Eintrag" enterkeyhint="send">${esc(draft)}</textarea><div class="row" style="margin-top:10px">${MIC?`<button class="mic" type="button" id="mic" aria-label="Sprechen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>`:''}<span class="hint" id="st">${MIC?'Tipp: Den runden Mikrofon-Knopf gedrückt halten startet die Aufnahme sofort.':'Tipp: Mikrofon der Tastatur antippen und sprechen.'}</span><button class="btn main" id="go" type="submit">Merken</button></div></form>`);
   const t=$('#t');setTimeout(()=>{t.focus();t.setSelectionRange(t.value.length,t.value.length)},60);
   t.addEventListener('input',()=>LS.set('fa-draft',t.value));
   t.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();$('#cap').requestSubmit()}});
-  if(SR)$('#mic').addEventListener('click',()=>{
+  if(CAN_REC)$('#mic').addEventListener('click',async()=>{
+    const m=$('#mic'),st=$('#st');
+    if(Voice.mr){m.classList.remove('on');st.textContent='Wird umgesetzt …';try{const x=await Voice.stop();const tt=$('#t');if(!tt)return;if(x){tt.value=(tt.value?tt.value.replace(/\s*$/,' '):'')+x;LS.set('fa-draft',tt.value);$('#st').textContent='Fertig? Dann „Merken“.'}else $('#st').textContent='Nichts verstanden – nochmal versuchen.'}catch(e){const s2=$('#st');if(s2)s2.textContent='Das Umwandeln hat nicht geklappt. Tippe oder nutze das Mikrofon der Tastatur.'}return}
+    try{const r=await Voice.start();m.classList.add('on');st.textContent=r.fresh?'Ich höre zu … tippe nochmal zum Beenden':'Ich höre zu … tippe nochmal zum Beenden'}catch(e){st.textContent='Mikrofon nicht erlaubt. Nutze das Mikrofon der Tastatur.'}
+  });
+  else if(SR)$('#mic').addEventListener('click',()=>{
     if(rec){rec.stop();return}
     rec=new SR();rec.lang='de-DE';rec.interimResults=true;rec.continuous=false;const base=t.value?t.value.replace(/\s*$/,' '):'';
     rec.onresult=e=>{let s='';for(const r of e.results)s+=r[0].transcript;t.value=base+s;LS.set('fa-draft',t.value)};
@@ -789,7 +813,7 @@ function openCapture(pre){
     $('#mic').classList.add('on');$('#st').textContent='Ich höre zu …';try{rec.start()}catch(e){rec=null}
   });
   $('#cap').addEventListener('submit',async ev=>{
-    ev.preventDefault();if(rec){try{rec.stop()}catch(e){}}const text=t.value.trim();if(!text)return;
+    ev.preventDefault();if(rec){try{rec.stop()}catch(e){}}if(Voice.mr)Voice.cancel();const text=t.value.trim();if(!text)return;
     const g=$('#go');g.disabled=true;$('#st').textContent='Sortiere …';
     try{await capture(text);LS.set('fa-draft','');closeSheet()}
     catch(err){$('#st').textContent='Nicht gespeichert: '+(err&&err.message||'Fehler');g.disabled=false}
@@ -1005,17 +1029,24 @@ $('#gear').addEventListener('click',async()=>{go('mehr');try{quickExists=(await 
   const bubble=m=>{if(!bub){bub=document.createElement('div');bub.className='holdbub';bub.setAttribute('role','status');document.body.appendChild(bub)}bub.textContent=m};
   const unbubble=()=>{if(bub){bub.remove();bub=null}fab.classList.remove('rec')};
   const finish=()=>{unbubble();const t=txt.trim();hr=null;if(cancel)return;if(t){const d=LS.get('fa-draft','');openCapture((typeof d==='string'&&d&&!/^\[object /.test(d)?d.replace(/\s*$/,' '):'')+t);const st=$('#st');if(st)st.textContent='Passt so? Dann „Merken“.'}else toast('Nichts verstanden – nochmal gedrückt halten und sprechen.')};
-  const startRec=()=>{hold=true;txt='';cancel=false;if(navigator.vibrate)try{navigator.vibrate(15)}catch(e){}
+  const startRec=()=>{if(CAN_REC)return startMR();hold=true;txt='';cancel=false;if(navigator.vibrate)try{navigator.vibrate(15)}catch(e){}
     fab.classList.add('rec');bubble('Ich höre zu … loslassen zum Beenden');
     try{hr=new SR();hr.lang='de-DE';hr.interimResults=true;hr.continuous=true;
       hr.onresult=e=>{let s='';for(const r of e.results)s+=r[0].transcript;txt=s;bubble(s||'Ich höre zu …')};
       hr.onerror=e=>{if(e&&(e.error==='not-allowed'||e.error==='service-not-allowed')){cancel=true;unbubble();hr=null;openCapture();const st=$('#st');if(st)st.textContent='Mikrofon nicht erlaubt – Mikrofon unten antippen.'}};
       hr.onend=finish;hr.start()}catch(e){hr=null;unbubble();openCapture()}};
+  let vp=null,upEarly=false;
+  const startMR=()=>{hold=true;cancel=false;upEarly=false;if(navigator.vibrate)try{navigator.vibrate(15)}catch(e){}
+    fab.classList.add('rec');bubble('Ich höre zu … loslassen zum Beenden');
+    vp=Voice.start().then(r=>{if(upEarly){Voice.cancel();unbubble();if(r.fresh)toast('Mikrofon ist freigegeben. Jetzt Knopf gedrückt halten und sprechen.');return}return r},e=>{unbubble();hold=false;openCapture();const st=$('#st');if(st)st.textContent='Mikrofon nicht erlaubt. Nutze das Mikrofon der Tastatur.';return null});};
+  const endMR=async()=>{hold=false;const p=vp;vp=null;if(!p)return;upEarly=true;const r=await p;if(!r)return;upEarly=false;bubble('Wird umgesetzt …');
+    try{const t=await Voice.stop();unbubble();if(cancel)return;if(t){const d=LS.get('fa-draft','');openCapture((typeof d==='string'&&d&&!/^\[object /.test(d)?d.replace(/\s*$/,' '):'')+t);const st=$('#st');if(st)st.textContent='Passt so? Dann „Merken“.'}else toast('Nichts verstanden – nochmal gedrückt halten und sprechen.')}
+    catch(e){unbubble();toast('Das Umwandeln hat nicht geklappt. Bitte nochmal oder tippen.')}};
   fab.addEventListener('contextmenu',e=>e.preventDefault());
-  fab.addEventListener('pointerdown',e=>{if(e.button>0)return;hold=false;if(!SR)return;clearTimeout(timer);timer=setTimeout(startRec,320)});
-  const up=e=>{clearTimeout(timer);timer=null;if(hold){if(hr){try{hr.stop()}catch(x){finish()}}hold=false}};
-  fab.addEventListener('pointerup',up);fab.addEventListener('pointercancel',()=>{clearTimeout(timer);if(hold&&hr){cancel=true;try{hr.abort()}catch(x){}unbubble()}hold=false});
-  fab.addEventListener('click',e=>{if(fab.classList.contains('rec')||hr||hold)return;openCapture()});
+  fab.addEventListener('pointerdown',e=>{if(e.button>0)return;hold=false;if(!MIC)return;clearTimeout(timer);timer=setTimeout(startRec,320)});
+  const up=e=>{clearTimeout(timer);timer=null;if(hold&&CAN_REC){endMR();return}if(hold){if(hr){try{hr.stop()}catch(x){finish()}}hold=false}};
+  fab.addEventListener('pointerup',up);fab.addEventListener('pointercancel',()=>{clearTimeout(timer);if(hold&&CAN_REC){cancel=true;upEarly=true;Voice.cancel();unbubble();hold=false;return}if(hold&&hr){cancel=true;try{hr.abort()}catch(x){}unbubble()}hold=false});
+  fab.addEventListener('click',e=>{if(fab.classList.contains('rec')||hr||hold||vp)return;openCapture()});
 })();
 let pressT=null,pressed=false;
 $('#p').addEventListener('pointerdown',ev=>{const t=ev.target.closest('[data-buy]');if(!t)return;pressed=false;clearTimeout(pressT);pressT=setTimeout(()=>{pressed=true;openItem('e:'+t.dataset.buy)},550)});

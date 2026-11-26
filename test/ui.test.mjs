@@ -244,7 +244,7 @@ try {
   await ph.waitForSelector('.ev:has-text("Elternsprechtag")');
   await ph.click('.tab[data-v=ideen]'); await ph.click('[data-a=new][data-k=gedanke]');
   await ph.fill('#newf [name=thema]', 'Weihnachten'); await ph.fill('#newf [name=text]', 'Plätzchen mit den Kindern backen'); await ph.click('#newf [type=submit]');
-  await ph.waitForSelector('.topic:has-text("Weihnachten")'); assert.match(await ph.textContent('.topic:has-text("Weihnachten")'), /Plätzchen/);
+  await ph.waitForSelector('.topic:has-text("Weihnachten"):has-text("Plätzchen")'); assert.match(await ph.textContent('.topic:has-text("Weihnachten")'), /Plätzchen/);
   await ph.click('.tab[data-v=heute]'); await ph.click('.card:has-text("Zu erledigen") [data-a=new]');
   await ph.fill('#newf [name=titel]', 'Winterreifen aufziehen'); await ph.click('#newf [type=submit]');
   await ph.waitForSelector('.task:has-text("Winterreifen")');
